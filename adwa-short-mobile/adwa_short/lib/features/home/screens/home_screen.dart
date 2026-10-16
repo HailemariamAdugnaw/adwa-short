@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/colors.dart';
-import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/poster_card.dart';
+import '../../../core/widgets/shelf_banner.dart';
 import '../../../models/series.dart';
+import '../../../models/shelf.dart';
 import '../providers/category_provider.dart';
 import '../providers/shelf_provider.dart';
 import '../widgets/category_tab_bar.dart';
 import '../widgets/home_shelf_section.dart';
-import '../widgets/search_bar_widget.dart';
+import '../widgets/overlay_search_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -33,6 +34,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _selectedTab = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -57,91 +60,96 @@ class _HomeScreenState extends State<HomeScreen> {
     await Future.wait(futures);
   }
 
+  void _onTabSelected(String id) {
+    setState(() => _selectedTab = id);
+    final cat = context.read<CategoryProvider>();
+    if (id == 'all' || id == 'popular' || id == 'hot' || id == 'new') {
+      cat.select('all');
+    } else {
+      cat.select(id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: AppColors.black,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          color: AppColors.bloodRed,
-          backgroundColor: AppColors.surfaceElevated,
-          onRefresh: _onRefresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: _header()),
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-              SliverToBoxAdapter(child: _categories()),
-              const SliverToBoxAdapter(child: SizedBox(height: 8)),
-              _body(),
-              const SliverToBoxAdapter(child: SizedBox(height: 96)),
-            ],
-          ),
+      body: RefreshIndicator(
+        color: AppColors.bloodRed,
+        backgroundColor: AppColors.surfaceElevated,
+        edgeOffset: topInset,
+        onRefresh: _onRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _hero()),
+            SliverPadding(
+              padding: EdgeInsets.only(top: topInset),
+              sliver: _body(),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 96)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _header() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
+  Widget _hero() {
+    final shelves = context.watch<ShelfProvider>();
+    final cat = context.watch<CategoryProvider>();
+    final banner = shelves.bannerShelf;
+    const heroHeight = 440.0;
+    final Widget heroChild;
+    if (banner != null && banner.items.isNotEmpty) {
+      heroChild = ShelfBanner(
+        items: banner.items,
+        immersive: true,
+        height: heroHeight,
+        onItemTap: widget.onWatchSeries,
+        onWatchNow: widget.onWatchSeries,
+      );
+    } else if (shelves.status == ShelfLoadStatus.loading ||
+        shelves.status == ShelfLoadStatus.idle) {
+      heroChild = const LoadingShimmer();
+    } else {
+      heroChild = Container(
+        color: AppColors.surfaceElevated,
+        child: const Center(
+          child: Icon(Icons.movie_outlined,
+              color: AppColors.textTertiary, size: 48),
+        ),
+      );
+    }
+    return SizedBox(
+      height: heroHeight,
+      width: double.infinity,
+      child: Stack(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RichText(
-                  text: TextSpan(
-                    style: AppTextStyles.display3.copyWith(fontSize: 22),
-                    children: const [
-                      TextSpan(
-                          text: 'ADWA',
-                          style: TextStyle(color: AppColors.white)),
-                      TextSpan(
-                          text: ' SHORT',
-                          style: TextStyle(color: AppColors.bloodRedBright)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text('Premium short drama',
-                    style: AppTextStyles.caption),
-              ],
+          Positioned.fill(child: heroChild),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: OverlaySearchBar(
+              onTap: widget.onOpenSearch,
+              onFilterTap: widget.onOpenSearch,
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded,
-                color: AppColors.textSecondary),
-            onPressed: () {
-
-            },
+          Positioned(
+            left: 0,
+            right: 0,
+            top: MediaQuery.of(context).padding.top + 60,
+            child: CategoryTabBar(
+              categories: cat.categories,
+              selectedId: _selectedTab,
+              onSelected: _onTabSelected,
+              overlay: true,
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _searchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: SearchBarWidget(onTap: widget.onOpenSearch),
-    );
-  }
-
-  Widget _categories() {
-    final cat = context.watch<CategoryProvider>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _searchBar(),
-        CategoryTabBar(
-          categories: cat.categories,
-          selectedId: cat.selectedId,
-          onSelected: cat.select,
-        ),
-      ],
     );
   }
 
@@ -173,13 +181,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         }
+        final rowShelves = shelves.shelves
+            .where((s) =>
+                s.type != ShelfType.banner && s.key != ShelfKeys.hot)
+            .toList();
         return SliverList.builder(
-          itemCount: shelves.shelves.length,
+          itemCount: rowShelves.length,
           itemBuilder: (_, i) {
-            final shelf = shelves.shelves[i];
+            final shelf = rowShelves[i];
             return HomeShelfSection(
               shelf: shelf,
-              onItemTap: widget.onOpenSeries,
+              onItemTap: widget.onWatchSeries,
               onWatchNow: widget.onWatchSeries,
             );
           },
@@ -202,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case CategorySeriesStatus.refreshing:
       case CategorySeriesStatus.success:
         if (cat.filteredSeries.isEmpty) {
-          return SliverToBoxAdapter(
+          return const SliverToBoxAdapter(
             child: EmptyState(
               icon: Icons.movie_filter_outlined,
               title: 'No series in this category',
@@ -225,8 +237,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 return PosterCard(
                   series: s,
                   width: double.infinity,
-                  onTap: widget.onOpenSeries != null
-                      ? () => widget.onOpenSeries!(s)
+                  onTap: widget.onWatchSeries != null
+                      ? () => widget.onWatchSeries!(s)
                       : null,
                 );
               },

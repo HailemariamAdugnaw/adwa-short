@@ -18,6 +18,8 @@ class ShelfBanner extends StatefulWidget {
     this.onWatchNow,
     this.autoPlay = true,
     this.duration = const Duration(seconds: 5),
+    this.immersive = false,
+    this.height,
   });
 
   final List<Series> items;
@@ -25,6 +27,8 @@ class ShelfBanner extends StatefulWidget {
   final void Function(Series)? onWatchNow;
   final bool autoPlay;
   final Duration duration;
+  final bool immersive;
+  final double? height;
 
   @override
   State<ShelfBanner> createState() => _ShelfBannerState();
@@ -38,7 +42,7 @@ class _ShelfBannerState extends State<ShelfBanner> {
   @override
   void initState() {
     super.initState();
-    _controller = PageController(viewportFraction: 0.92);
+    _controller = PageController(viewportFraction: widget.immersive ? 1.0 : 0.92);
     if (widget.autoPlay) _scheduleNext();
   }
 
@@ -66,12 +70,15 @@ class _ShelfBannerState extends State<ShelfBanner> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
-    final height = MediaQuery.of(context).size.width * 9 / 16 + 24;
-    return Column(
-      children: [
-        SizedBox(
-          height: height,
-          child: PageView.builder(
+    final height = widget.height ??
+        (widget.immersive
+            ? 440.0
+            : MediaQuery.of(context).size.width * 9 / 16 + 24);
+    return SizedBox(
+      height: height,
+      child: Stack(
+        children: [
+          PageView.builder(
             controller: _controller,
             itemCount: widget.items.length,
             onPageChanged: (i) {
@@ -80,24 +87,40 @@ class _ShelfBannerState extends State<ShelfBanner> {
             },
             itemBuilder: (_, i) {
               final s = widget.items[i];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: _BannerCard(
-                  series: s,
-                  onTap: widget.onItemTap != null
-                      ? () => widget.onItemTap!(s)
-                      : null,
-                  onWatchNow: widget.onWatchNow != null
-                      ? () => widget.onWatchNow!(s)
-                      : null,
-                ),
-              );
+              return widget.immersive
+                  ? _BannerCard(
+                      series: s,
+                      immersive: true,
+                      onTap: widget.onItemTap != null
+                          ? () => widget.onItemTap!(s)
+                          : null,
+                      onWatchNow: widget.onWatchNow != null
+                          ? () => widget.onWatchNow!(s)
+                          : null,
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: _BannerCard(
+                        series: s,
+                        immersive: false,
+                        onTap: widget.onItemTap != null
+                            ? () => widget.onItemTap!(s)
+                            : null,
+                        onWatchNow: widget.onWatchNow != null
+                            ? () => widget.onWatchNow!(s)
+                            : null,
+                      ),
+                    );
             },
           ),
-        ),
-        const SizedBox(height: 8),
-        _dots(),
-      ],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: widget.immersive ? 14 : 0,
+            child: _dots(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -112,7 +135,11 @@ class _ShelfBannerState extends State<ShelfBanner> {
           width: active ? 18 : 6,
           height: 6,
           decoration: BoxDecoration(
-            color: active ? AppColors.bloodRed : AppColors.surfaceElevated,
+            color: active
+                ? AppColors.bloodRed
+                : (widget.immersive
+                    ? Colors.white.withValues(alpha: 0.35)
+                    : AppColors.surfaceElevated),
             borderRadius: BorderRadius.circular(3),
           ),
         );
@@ -124,97 +151,124 @@ class _ShelfBannerState extends State<ShelfBanner> {
 class _BannerCard extends StatelessWidget {
   const _BannerCard({
     required this.series,
+    required this.immersive,
     this.onTap,
     this.onWatchNow,
   });
 
   final Series series;
+  final bool immersive;
   final VoidCallback? onTap;
   final VoidCallback? onWatchNow;
 
   @override
   Widget build(BuildContext context) {
     final bannerUrl = ApiClient.resolveMediaUrl(series.bannerUrl);
+    final card = Stack(
+      fit: StackFit.expand,
+      children: [
+        bannerUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: bannerUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => const LoadingShimmer(),
+                errorWidget: (_, __, ___) => _fallback(series),
+              )
+            : _fallback(series),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: immersive
+                    ? [
+                        Colors.black.withValues(alpha: 0.25),
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.9),
+                      ]
+                    : [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                stops: const [0.0, 0.45, 1.0],
+              ),
+            ),
+          ),
+        ),
+        if (!immersive)
+          Positioned(
+            top: 12,
+            left: 12,
+            child: Wrap(
+              spacing: 6,
+              children: [
+                if (series.isHot) const TagChip.hot(),
+                if (series.isVip) const TagChip.vip(),
+                if (series.isExclusive) const TagChip.exclusive(),
+                if (series.isNewRelease) const TagChip.newRelease(),
+              ],
+            ),
+          ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: immersive ? 36 : 16,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                series.title,
+                style: immersive
+                    ? const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        height: 1.25,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            blurRadius: 12,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      )
+                    : AppTextStyles.h1,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (onWatchNow != null) _WatchNowButton(onTap: onWatchNow!),
+                  if (series.totalEpisodes > 0) ...[
+                    const SizedBox(width: 10),
+                    Text(
+                      '${series.totalEpisodes} EP',
+                      style: AppTextStyles.caption.copyWith(
+                        color: immersive
+                            ? Colors.white.withValues(alpha: 0.85)
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            bannerUrl.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: bannerUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => const LoadingShimmer(),
-                    errorWidget: (_, __, ___) => _fallback(series),
-                  )
-                : _fallback(series),
-
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.85),
-                    ],
-                    stops: const [0.0, 0.45, 1.0],
-                  ),
-                ),
-              ),
+      child: immersive
+          ? card
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: card,
             ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Wrap(
-                spacing: 6,
-                children: [
-                  if (series.isHot) const TagChip.hot(),
-                  if (series.isVip) const TagChip.vip(),
-                  if (series.isExclusive) const TagChip.exclusive(),
-                  if (series.isNewRelease) const TagChip.newRelease(),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    series.title,
-                    style: AppTextStyles.h1,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      if (onWatchNow != null)
-                        _WatchNowButton(onTap: onWatchNow!),
-                      if (series.totalEpisodes > 0) ...[
-                        const SizedBox(width: 10),
-                        Text(
-                          '${series.totalEpisodes} EP',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -229,8 +283,8 @@ class _BannerCard extends StatelessWidget {
             Container(color: AppColors.surfaceElevated),
       );
     }
-    return Container(
-      decoration: const BoxDecoration(
+    return const DecoratedBox(
+      decoration: BoxDecoration(
         gradient: AppColors.walletCardGradient,
       ),
       child: Center(
