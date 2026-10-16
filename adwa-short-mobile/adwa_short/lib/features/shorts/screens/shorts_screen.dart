@@ -9,17 +9,26 @@ import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../features/reviews/widgets/review_bottom_sheet.dart';
 import '../../../models/episode.dart';
+import '../../../models/series.dart';
 import '../../../models/short_item.dart';
 import '../providers/shorts_provider.dart';
+import '../widgets/episode_selector_sheet.dart';
+import '../widgets/rating_sheet.dart';
 import '../widgets/short_video_item.dart';
 
 class ShortsScreen extends StatefulWidget {
   const ShortsScreen({
     super.key,
     this.onWatchNow,
+    this.onOpenSearch,
+    this.onOpenSeries,
+    this.onPlayEpisode,
   });
 
   final void Function(String seriesId)? onWatchNow;
+  final VoidCallback? onOpenSearch;
+  final void Function(String seriesId)? onOpenSeries;
+  final void Function(Series series, Episode episode)? onPlayEpisode;
 
   @override
   State<ShortsScreen> createState() => _ShortsScreenState();
@@ -76,6 +85,10 @@ class _ShortsScreenState extends State<ShortsScreen> {
     await p.refresh();
   }
 
+  void _openRating(ShortItem item) {
+    RatingSheet.show(context, item: item);
+  }
+
   void _openReviews(ShortItem item) {
     final episode = _toEpisode(item);
     ReviewBottomSheet.show(
@@ -83,6 +96,48 @@ class _ShortsScreenState extends State<ShortsScreen> {
       episode: episode,
       seriesTitle: item.seriesTitle,
       defaultEpisodeId: item.episodeId ?? item.id,
+    );
+  }
+
+  void _openSearch() {
+    widget.onOpenSearch?.call();
+  }
+
+  void _showShareToast(ShortItem item) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.surfaceElevated,
+        content: Text(
+          'Sharing "${item.title}"…',
+          style: AppTextStyles.body3.copyWith(color: AppColors.white),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showEpisodesSheet(ShortItem item) {
+    if (widget.onPlayEpisode == null && widget.onOpenSeries == null) {
+      return;
+    }
+    EpisodeSelectorSheet.show(
+      context,
+      seriesId: item.seriesId,
+      currentEpisodeId: item.episodeId,
+      currentEpisodeNumber: item.episodeNumber,
+      onEpisodeSelected: (episode) {
+        final series = Series(
+          id: item.seriesId,
+          title: item.seriesTitle ?? item.title,
+          episodes: [episode],
+        );
+        if (widget.onPlayEpisode != null) {
+          widget.onPlayEpisode!(series, episode);
+        } else if (widget.onOpenSeries != null) {
+          widget.onOpenSeries!(item.seriesId);
+        }
+      },
     );
   }
 
@@ -106,10 +161,68 @@ class _ShortsScreenState extends State<ShortsScreen> {
     final p = context.watch<ShortsProvider>();
     return Scaffold(
       backgroundColor: AppColors.black,
-      body: SafeArea(
-        child: _body(p),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _body(p),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: _topActionButtons(),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  List<Widget> _topActionButtons() {
+    return [
+      GestureDetector(
+        onTap: _openReviewsForCurrent,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.35),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.reviews_outlined,
+              color: AppColors.white, size: 20),
+        ),
+      ),
+      const SizedBox(width: 8),
+      GestureDetector(
+        onTap: _openSearch,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.35),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.search_rounded,
+              color: AppColors.white, size: 22),
+        ),
+      ),
+    ];
+  }
+
+  void _openReviewsForCurrent() {
+    final p = context.read<ShortsProvider>();
+    if (_current < 0 || _current >= p.items.length) return;
+    _openReviews(p.items[_current]);
   }
 
   Widget _body(ShortsProvider p) {
@@ -156,16 +269,13 @@ class _ShortsScreenState extends State<ShortsScreen> {
         return ShortVideoItem(
           item: item,
           active: i == _current,
+          totalEpisodes: item.totalEpisodes,
           isAccessible: item.isAccessible,
           accessReason: item.accessReason,
           onSave: () => p.toggleSave(i),
           onShowEpisodes: () => _showEpisodesSheet(item),
-          onShowReviews: () => _openReviews(item),
-          onWatchNow: () {
-            if (widget.onWatchNow != null) {
-              widget.onWatchNow!(item.seriesId);
-            }
-          },
+          onRate: () => _openRating(item),
+          onShare: () => _showShareToast(item),
           onBuyCoins: _openCoins,
           onBuyPass: _openPasses,
           onSubscribe: _openSubscriptions,
@@ -179,54 +289,6 @@ class _ShortsScreenState extends State<ShortsScreen> {
           },
         );
       },
-    );
-  }
-
-  void _showEpisodesSheet(ShortItem item) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  Text('Episodes', style: AppTextStyles.h3),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: AppColors.textSecondary),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(color: AppColors.divider, height: 1),
-            ListTile(
-              leading: const Icon(Icons.play_circle_outline_rounded,
-                  color: AppColors.bloodRed),
-              title: Text(item.title, style: AppTextStyles.body1),
-              subtitle: Text(
-                'Open series page to see all episodes',
-                style: AppTextStyles.body3,
-              ),
-              onTap: () {
-                Navigator.of(context).pop();
-                if (widget.onWatchNow != null) {
-                  widget.onWatchNow!(item.seriesId);
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
     );
   }
 }

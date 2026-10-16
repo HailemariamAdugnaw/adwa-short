@@ -8,19 +8,21 @@ import '../../../core/utils/video_format.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/short_item.dart';
 import 'paywall_overlay.dart';
-import 'short_overlay_buttons.dart';
+import 'right_action_bar.dart';
+import 'short_bottom_info.dart';
 
 class ShortVideoItem extends StatefulWidget {
   const ShortVideoItem({
     super.key,
     required this.item,
     required this.active,
+    this.totalEpisodes,
     this.isAccessible = true,
     this.accessReason,
     this.onSave,
     this.onShowEpisodes,
-    this.onShowReviews,
-    this.onWatchNow,
+    this.onRate,
+    this.onShare,
     this.onBuyCoins,
     this.onBuyPass,
     this.onSubscribe,
@@ -29,15 +31,13 @@ class ShortVideoItem extends StatefulWidget {
 
   final ShortItem item;
   final bool active;
+  final int? totalEpisodes;
   final bool isAccessible;
   final String? accessReason;
-
-  // These are now successfully marked as optional
   final VoidCallback? onSave;
   final VoidCallback? onShowEpisodes;
-  final VoidCallback? onShowReviews;
-  final VoidCallback? onWatchNow;
-
+  final VoidCallback? onRate;
+  final VoidCallback? onShare;
   final VoidCallback? onBuyCoins;
   final VoidCallback? onBuyPass;
   final VoidCallback? onSubscribe;
@@ -52,7 +52,6 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
   bool _initialized = false;
   bool _hasError = false;
   String _errorMessage = '';
-  String _videoUrl = '';
   String _videoFormat = 'unknown';
 
   bool get _shouldPlay => widget.isAccessible;
@@ -84,7 +83,6 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
   Future<void> _initPlayer() async {
     if (_initialized || _hasError) return;
     final url = ApiClient.resolveMediaUrl(widget.item.verticalVideoUrl);
-    _videoUrl = url;
     _videoFormat = url.isEmpty ? 'unknown' : AdwaVideoFormat.detect(url);
     if (url.isEmpty) {
       setState(() {
@@ -192,148 +190,57 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
   @override
   Widget build(BuildContext context) {
     if (!widget.isAccessible) {
-      return _lockedView();
+      return PaywallOverlay(
+        item: widget.item,
+        onBuyCoins: widget.onBuyCoins,
+        onBuyPass: widget.onBuyPass,
+        onSubscribe: widget.onSubscribe,
+        onMaybeLater: widget.onMaybeLater,
+      );
     }
     return Container(
       color: AppColors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_initialized && _controller != null && !_controller!.value.hasError)
-            GestureDetector(
-              onTap: _togglePlayPause,
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: _controller!.value.aspectRatio,
-                  child: VideoPlayer(_controller!),
-                ),
-              ),
-            )
-          else if (_hasError)
-            _errorFallback()
-          else
-            const Center(
-                child: LoadingShimmer(
-                    width: 60, height: 60, borderRadius: 30)),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.4),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.7),
-                  ],
-                  stops: const [0.0, 0.2, 0.55, 1.0],
-                ),
-              ),
-            ),
-          ),
+          _videoLayer(),
+          _bottomGradient(),
           if (_initialized &&
               _controller != null &&
               !_controller!.value.isPlaying)
-            Center(
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.play_arrow_rounded,
-                    color: AppColors.white, size: 48),
-              ),
-            ),
+            _centerPlayIcon(),
           Positioned(
-            right: 12,
-            bottom: 96,
-            child: ShortOverlayButtons(
-              item: widget.item,
-              onSave: widget.onSave,
-              onShowEpisodes: widget.onShowEpisodes,
-              onShowReviews: widget.onShowReviews,
+            right: 6,
+            top: 70,
+            bottom: 180,
+            child: SizedBox(
+              width: 60,
+              child: Center(
+                child: RightActionBar(
+                  item: widget.item,
+                  onRate: widget.onRate,
+                  onShowEpisodes: widget.onShowEpisodes,
+                  onSave: widget.onSave,
+                  onShare: widget.onShare,
+                ),
+              ),
             ),
           ),
           Positioned(
             left: 16,
-            right: 84,
-            bottom: 96,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget.item.tags.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: widget.item.tags
-                          .take(3)
-                          .map((t) => _TagChip(label: t.toUpperCase()))
-                          .toList(),
-                    ),
-                  ),
-                if (widget.item.seriesTitle != null) ...[
-                  Text(
-                    widget.item.seriesTitle!,
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.bloodRedBright),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                ],
-                Text(
-                  widget.item.title,
-                  style: AppTextStyles.h2,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (widget.item.description.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.item.description,
-                    style: AppTextStyles.body2
-                        .copyWith(color: AppColors.textSecondary),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: widget.onWatchNow,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.bloodRed,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.play_arrow_rounded,
-                            color: AppColors.white, size: 16),
-                        const SizedBox(width: 6),
-                        Text('Watch Now',
-                            style: AppTextStyles.label
-                                .copyWith(color: AppColors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            right: 76,
+            bottom: 24,
+            child: ShortBottomInfo(
+              item: widget.item,
+              totalEpisodes: widget.totalEpisodes,
+              onShowEpisodes: widget.onShowEpisodes,
             ),
           ),
           if (_initialized && _controller != null)
             Positioned(
-              top: 0,
               left: 0,
               right: 0,
+              bottom: 0,
               child: AnimatedBuilder(
                 animation: _controller!,
                 builder: (_, __) {
@@ -349,51 +256,67 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
                 },
               ),
             ),
-          Positioned(
-            top: 12,
-            left: 12,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.visibility_outlined,
-                      color: AppColors.white, size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    _freePreviewLabel(),
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.white),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  String _freePreviewLabel() {
-    final epNum = widget.item.episodeNumber;
-    if (epNum != null) {
-      return 'Episode $epNum · Free Preview';
+  Widget _videoLayer() {
+    if (_initialized && _controller != null && !_controller!.value.hasError) {
+      final size = _controller!.value.size;
+      return GestureDetector(
+        onTap: _togglePlayPause,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: size.width <= 0 ? 1 : size.width,
+            height: size.height <= 0 ? 1 : size.height,
+            child: VideoPlayer(_controller!),
+          ),
+        ),
+      );
     }
-    return 'Free Preview';
+    if (_hasError) return _errorFallback();
+    if (_shouldPlay) {
+      return const Center(
+        child: LoadingShimmer(width: 60, height: 60, borderRadius: 30),
+      );
+    }
+    return Container(color: AppColors.black);
   }
 
-  Widget _lockedView() {
-    return PaywallOverlay(
-      item: widget.item,
-      onBuyCoins: widget.onBuyCoins,
-      onBuyPass: widget.onBuyPass,
-      onSubscribe: widget.onSubscribe,
-      onMaybeLater: widget.onMaybeLater,
+  Widget _bottomGradient() {
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 0.35),
+              Colors.transparent,
+              Colors.transparent,
+              Colors.black.withValues(alpha: 0.85),
+            ],
+            stops: const [0.0, 0.18, 0.55, 1.0],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _centerPlayIcon() {
+    return Center(
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.play_arrow_rounded,
+            color: AppColors.white, size: 48),
+      ),
     );
   }
 
@@ -434,26 +357,6 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
                 ),
               ),
             ],
-            if (_videoUrl.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('Video URL', style: AppTextStyles.label),
-              const SizedBox(height: 4),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: SelectableText(
-                  _videoUrl,
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
             const SizedBox(height: 14),
             ElevatedButton.icon(
               onPressed: _retry,
@@ -469,29 +372,6 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
             ),
             const SizedBox(height: 80),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TagChip extends StatelessWidget {
-  const _TagChip({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.bloodRed.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.overline.copyWith(
-          color: AppColors.white,
-          fontSize: 9,
         ),
       ),
     );

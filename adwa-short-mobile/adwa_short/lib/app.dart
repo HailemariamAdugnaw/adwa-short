@@ -21,6 +21,7 @@ import 'features/profile/screens/settings_screen.dart';
 import 'features/profile/screens/subscriptions_screen.dart';
 import 'features/profile/screens/wallet_screen.dart';
 import 'features/search/screens/search_screen.dart';
+import 'features/series/providers/series_provider.dart';
 import 'features/series/screens/episode_player_screen.dart';
 import 'features/series/screens/series_detail_screen.dart';
 import 'features/shorts/screens/shorts_screen.dart';
@@ -214,10 +215,19 @@ class _MainShellState extends State<MainShell> {
                 Navigator.of(context).pushNamed(AppRoutes.search),
             onOpenSeries: (s) => Navigator.of(context)
                 .pushNamed(AppRoutes.seriesDetail, arguments: s.id),
+            onWatchSeries: (s) => _watchSeries(s),
           ),
           ShortsScreen(
             onWatchNow: (seriesId) => Navigator.of(context)
                 .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
+            onOpenSearch: () =>
+                Navigator.of(context).pushNamed(AppRoutes.search),
+            onOpenSeries: (seriesId) => Navigator.of(context)
+                .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
+            onPlayEpisode: (series, episode) => Navigator.of(context).pushNamed(
+              AppRoutes.episodePlayer,
+              arguments: {'series': series, 'episode': episode},
+            ),
           ),
           MyListScreen(
             onOpenSeries: (s) => Navigator.of(context)
@@ -247,6 +257,23 @@ class _MainShellState extends State<MainShell> {
         currentIndex: _index,
         onTap: _goTo,
       ),
+    );
+  }
+
+  Future<void> _watchSeries(Series series) async {
+    final provider = context.read<SeriesProvider>();
+    await provider.load(series.id);
+    if (!mounted) return;
+    final s = provider.series;
+    if (s == null || s.episodes.isEmpty) {
+      Navigator.of(context)
+          .pushNamed(AppRoutes.seriesDetail, arguments: series.id);
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushNamed(
+      AppRoutes.episodePlayer,
+      arguments: {'series': s, 'episode': s.episodes.first},
     );
   }
 }

@@ -14,6 +14,7 @@ class ShortItem {
     this.accessReason,
     this.episodeNumber,
     this.seriesTitle,
+    this.totalEpisodes = 0,
     this.averageRating,
     this.ratingCount,
     this.thumbnailUrl,
@@ -33,6 +34,7 @@ class ShortItem {
   final String? accessReason;
   final int? episodeNumber;
   final String? seriesTitle;
+  final int totalEpisodes;
   final double? averageRating;
   final int? ratingCount;
   final String? thumbnailUrl;
@@ -85,6 +87,9 @@ class ShortItem {
       accessReason: json['access_reason']?.toString(),
       episodeNumber: _asInt(json['episode_number']) ?? _asInt(json['number']),
       seriesTitle: json['series_title']?.toString(),
+      totalEpisodes: _asInt(json['total_episodes']) ??
+          _asInt(json['episode_count']) ??
+          0,
       averageRating: _asDouble(json['average_rating']),
       ratingCount: _asInt(json['rating_count']),
       thumbnailUrl:
@@ -107,6 +112,7 @@ class ShortItem {
         'access_reason': accessReason,
         'episode_number': episodeNumber,
         'series_title': seriesTitle,
+        'total_episodes': totalEpisodes,
         'average_rating': averageRating,
         'rating_count': ratingCount,
         'thumbnail_url': thumbnailUrl,
@@ -127,6 +133,7 @@ class ShortItem {
     String? accessReason,
     int? episodeNumber,
     String? seriesTitle,
+    int? totalEpisodes,
     double? averageRating,
     int? ratingCount,
     String? thumbnailUrl,
@@ -146,6 +153,7 @@ class ShortItem {
         accessReason: accessReason ?? this.accessReason,
         episodeNumber: episodeNumber ?? this.episodeNumber,
         seriesTitle: seriesTitle ?? this.seriesTitle,
+        totalEpisodes: totalEpisodes ?? this.totalEpisodes,
         averageRating: averageRating ?? this.averageRating,
         ratingCount: ratingCount ?? this.ratingCount,
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,

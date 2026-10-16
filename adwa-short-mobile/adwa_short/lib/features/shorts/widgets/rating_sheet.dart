@@ -3,82 +3,22 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../features/ratings/providers/rating_provider.dart';
 import '../../../models/short_item.dart';
 
-class ShortOverlayButtons extends StatelessWidget {
-  const ShortOverlayButtons({
-    super.key,
-    required this.item,
-    this.onRate,
-    this.onSave,
-    this.onShowEpisodes,
-    this.onShowReviews,
-  });
+class RatingSheet extends StatefulWidget {
+  const RatingSheet({super.key, required this.item, this.onRate});
 
   final ShortItem item;
   final void Function(int rating)? onRate;
-  final VoidCallback? onSave;
-  final VoidCallback? onShowEpisodes;
-  final VoidCallback? onShowReviews;
 
-  @override
-  Widget build(BuildContext context) {
-    final ratingProvider = context.watch<RatingProvider>();
-    final episodeId = item.episodeId ?? item.id;
-    final summary = ratingProvider.summaryFor(episodeId);
-    final userRating = ratingProvider.userRatingFor(episodeId);
-    final avg = summary?.average ?? item.averageRating;
-    final count = summary?.count ?? item.ratingCount ?? 0;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _action(
-          icon: userRating > 0
-              ? Icons.star_rounded
-              : Icons.star_border_rounded,
-          color: userRating > 0 ? AppColors.bloodRed : AppColors.white,
-          label: avg != null ? avg.toStringAsFixed(1) : 'Rate',
-          onTap: () => _openRatingSheet(context),
-        ),
-        const SizedBox(height: 18),
-        _action(
-          icon: item.isSaved
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
-          color: item.isSaved ? AppColors.bloodRedBright : AppColors.white,
-          label: 'Save',
-          onTap: onSave,
-        ),
-        const SizedBox(height: 18),
-        _action(
-          icon: Icons.reviews_outlined,
-          color: AppColors.white,
-          label: count > 0 ? Formatters.compact(count) : 'Reviews',
-          onTap: onShowReviews,
-        ),
-        const SizedBox(height: 18),
-        _action(
-          icon: Icons.video_library_outlined,
-          color: AppColors.white,
-          label: 'Episodes',
-          onTap: onShowEpisodes,
-        ),
-        const SizedBox(height: 18),
-        _action(
-          icon: Icons.share_outlined,
-          color: AppColors.white,
-          label: 'Share',
-          onTap: () {},
-        ),
-      ],
-    );
-  }
-
-  void _openRatingSheet(BuildContext context) {
-    showModalBottomSheet<void>(
+  static Future<void> show(
+    BuildContext context, {
+    required ShortItem item,
+    void Function(int rating)? onRate,
+  }) {
+    return showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
@@ -86,63 +26,15 @@ class ShortOverlayButtons extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _RatingSheet(
-        item: item,
-        onRate: onRate,
-      ),
+      builder: (_) => RatingSheet(item: item, onRate: onRate),
     );
   }
-
-  Widget _action({
-    required IconData icon,
-    required Color color,
-    required String label,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.35),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
-              shadows: const [
-                Shadow(color: Colors.black87, blurRadius: 4),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RatingSheet extends StatefulWidget {
-  const _RatingSheet({required this.item, this.onRate});
-
-  final ShortItem item;
-  final void Function(int rating)? onRate;
 
   @override
-  State<_RatingSheet> createState() => _RatingSheetState();
+  State<RatingSheet> createState() => _RatingSheetState();
 }
 
-class _RatingSheetState extends State<_RatingSheet> {
+class _RatingSheetState extends State<RatingSheet> {
   int _selected = 0;
 
   @override

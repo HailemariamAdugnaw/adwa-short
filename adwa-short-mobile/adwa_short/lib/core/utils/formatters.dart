@@ -25,6 +25,12 @@ class Formatters {
         : '${m.toStringAsFixed(1)}M';
   }
 
+  static String formatCount(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return count.toString();
+  }
+
   static String durationFromMinutes(int minutes) {
     if (minutes <= 0) return '0 min';
     final h = minutes ~/ 60;

@@ -5,58 +5,75 @@ import '../../models/series.dart';
 import '../network/api_client.dart';
 import '../theme/colors.dart';
 import '../theme/text_styles.dart';
+import '../utils/formatters.dart';
 import 'loading_shimmer.dart';
-import 'tag_chip.dart';
 
 class PosterCard extends StatelessWidget {
   const PosterCard({
     super.key,
     required this.series,
     this.onTap,
-    this.width = 130,
+    this.width,
     this.showTitle = true,
   });
 
   final Series series;
   final VoidCallback? onTap;
-  final double width;
+  final double? width;
   final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: width,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _poster(),
-            if (showTitle) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Text(
-                  series.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.label,
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _poster(),
+        if (showTitle) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              series.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.label.copyWith(
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+              ),
+            ),
+          ),
+          if (_categoryLabel().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, left: 2),
+              child: Text(
+                _categoryLabel(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
                 ),
               ),
-              if (series.totalEpisodes > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, left: 2),
-                  child: Text(
-                    '${series.totalEpisodes} Eps',
-                    style: AppTextStyles.caption,
-                  ),
-                ),
-            ],
-          ],
-        ),
-      ),
+            ),
+        ],
+      ],
     );
+    final w = width;
+    return GestureDetector(
+      onTap: onTap,
+      child: w == null ? content : SizedBox(width: w, child: content),
+    );
+  }
+
+  String _categoryLabel() {
+    if (series.category != null && series.category!.isNotEmpty) {
+      return series.category!;
+    }
+    if (series.tags.isNotEmpty) {
+      return series.tags.first;
+    }
+    return '';
   }
 
   Widget _poster() {
@@ -76,12 +93,6 @@ class PosterCard extends StatelessWidget {
                   )
                 : _placeholderPoster(),
           ),
-          Positioned(
-            top: 8,
-            left: 8,
-            child: _badges(),
-          ),
-
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -90,11 +101,22 @@ class PosterCard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.35),
+                    Colors.black.withValues(alpha: 0.55),
                   ],
+                  stops: const [0.5, 1.0],
                 ),
               ),
             ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: _badge(),
+          ),
+          Positioned(
+            bottom: 4,
+            right: 4,
+            child: _viewCountOverlay(),
           ),
         ],
       ),
@@ -109,16 +131,16 @@ class PosterCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.movie_outlined,
-                color: AppColors.textTertiary, size: 32),
-            const SizedBox(height: 6),
+                color: AppColors.textTertiary, size: 28),
+            const SizedBox(height: 4),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Text(
                 series.title,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption,
+                style: AppTextStyles.caption.copyWith(fontSize: 10),
               ),
             ),
           ],
@@ -127,26 +149,74 @@ class PosterCard extends StatelessWidget {
     );
   }
 
-  Widget _badges() {
-    final chips = <Widget>[];
-    if (series.isHot) {
-      chips.add(const TagChip.hot(label: 'HOT'));
-    }
-    if (series.isVip) {
-      chips.add(const TagChip.vip());
-    }
-    if (series.isExclusive) {
-      chips.add(const TagChip.exclusive());
-    }
-    if (series.isNewRelease) {
-      chips.add(const TagChip.newRelease());
-    }
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      direction: Axis.vertical,
-      spacing: 4,
-      runSpacing: 0,
-      children: chips,
+  Widget _badge() {
+    final BadgeSpec? spec = _badgeSpec();
+    if (spec == null) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: spec.color,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        spec.label,
+        style: AppTextStyles.overline.copyWith(
+          color: AppColors.white,
+          fontSize: 9,
+          letterSpacing: 0.6,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
+
+  BadgeSpec? _badgeSpec() {
+    if (series.isHot) {
+      return const BadgeSpec(label: 'HOT', color: AppColors.bloodRed);
+    }
+    if (series.isExclusive) {
+      return const BadgeSpec(label: 'EXCL', color: AppColors.info);
+    }
+    if (series.isVip) {
+      return const BadgeSpec(label: 'VIP', color: AppColors.vipGold);
+    }
+    if (series.isNewRelease) {
+      return const BadgeSpec(label: 'NEW', color: AppColors.bloodRedBright);
+    }
+    return null;
+  }
+
+  Widget _viewCountOverlay() {
+    final count = series.viewsCount;
+    if (count <= 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.play_arrow_rounded,
+              color: AppColors.white, size: 10),
+          const SizedBox(width: 2),
+          Text(
+            Formatters.formatCount(count),
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BadgeSpec {
+  const BadgeSpec({required this.label, required this.color});
+  final String label;
+  final Color color;
 }

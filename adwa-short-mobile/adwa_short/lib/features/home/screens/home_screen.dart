@@ -15,11 +15,18 @@ import '../widgets/home_shelf_section.dart';
 import '../widgets/search_bar_widget.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.onOpenSearch, this.onOpenSeries});
+  const HomeScreen({
+    super.key,
+    this.onOpenSearch,
+    this.onOpenSeries,
+    this.onWatchSeries,
+  });
 
   final VoidCallback? onOpenSearch;
 
   final void Function(Series series)? onOpenSeries;
+
+  final void Function(Series series)? onWatchSeries;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -173,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return HomeShelfSection(
               shelf: shelf,
               onItemTap: widget.onOpenSeries,
+              onWatchNow: widget.onWatchSeries,
             );
           },
         );
@@ -209,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisCount: 3,
               mainAxisSpacing: 16,
               crossAxisSpacing: 12,
-              childAspectRatio: 0.52,
+              childAspectRatio: 0.48,
             ),
             delegate: SliverChildBuilderDelegate(
               (BuildContext context, int i) {

@@ -23,6 +23,7 @@ class Series {
     this.averageRating,
     this.ratingCount,
     this.reviewCount,
+    this.viewsCount = 0,
     this.episodeId,
   });
 
@@ -47,6 +48,7 @@ class Series {
   final double? averageRating;
   final int? ratingCount;
   final int? reviewCount;
+  final int viewsCount;
   final String? episodeId;
 
   factory Series.fromJson(Map<String, dynamic> json) {
@@ -108,6 +110,9 @@ class Series {
       averageRating: _asDouble(json['average_rating']),
       ratingCount: _asInt(json['rating_count']),
       reviewCount: _asInt(json['review_count']),
+      viewsCount: _asInt(json['views_count']) ??
+          _asInt(json['view_count']) ??
+          0,
       episodeId: json['episode_id']?.toString(),
     );
   }
@@ -134,6 +139,7 @@ class Series {
         'average_rating': averageRating,
         'rating_count': ratingCount,
         'review_count': reviewCount,
+        'views_count': viewsCount,
         'episode_id': episodeId,
       };
 
@@ -159,6 +165,7 @@ class Series {
     double? averageRating,
     int? ratingCount,
     int? reviewCount,
+    int? viewsCount,
     String? episodeId,
   }) =>
       Series(
@@ -183,6 +190,7 @@ class Series {
         averageRating: averageRating ?? this.averageRating,
         ratingCount: ratingCount ?? this.ratingCount,
         reviewCount: reviewCount ?? this.reviewCount,
+        viewsCount: viewsCount ?? this.viewsCount,
         episodeId: episodeId ?? this.episodeId,
       );
 }

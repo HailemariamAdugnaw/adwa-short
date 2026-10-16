@@ -98,16 +98,15 @@ export function SeriesEdit() {
             <TH>Title</TH>
             <TH className="text-right">Duration</TH>
             <TH className="text-right">Coin cost</TH>
-            <TH>Type</TH>
             <TH>Status</TH>
             <TH className="text-right">Actions</TH>
           </TR>
         </THead>
         <TBody>
           {loadingEpisodes ? (
-            <SkeletonRow colSpan={7} rows={4} />
+            <SkeletonRow colSpan={6} rows={4} />
           ) : (episodes ?? []).length === 0 ? (
-            <EmptyRow colSpan={7}>
+            <EmptyRow colSpan={6}>
               <EmptyState
                 icon={Clock}
                 title="No episodes yet"
@@ -133,11 +132,6 @@ export function SeriesEdit() {
                   {formatDuration(ep.duration_seconds)}
                 </TD>
                 <TD className="text-right tabular-nums">{ep.coin_cost}</TD>
-                <TD>
-                  <Badge tone={ep.is_short ? 'accent' : 'neutral'}>
-                    {ep.is_short ? 'Short' : 'Full'}
-                  </Badge>
-                </TD>
                 <TD>
                   {ep.is_published ? (
                     <Badge tone="success">Published</Badge>

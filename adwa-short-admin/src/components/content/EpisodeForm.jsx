@@ -26,7 +26,6 @@ export function EpisodeForm({ seriesId, initial, onSaved, onCancel }) {
     video_url: initial?.video_url ?? '',
     duration_seconds: initial?.duration_seconds ?? 0,
     thumbnail_url: initial?.thumbnail_url ?? '',
-    is_short: initial?.is_short ?? false,
     vertical_video_url: initial?.vertical_video_url ?? '',
     coin_cost: initial?.coin_cost ?? 0,
     creator_id: initial?.creator_id ?? inheritedCreatorId ?? '',
@@ -111,6 +110,7 @@ export function EpisodeForm({ seriesId, initial, onSaved, onCancel }) {
     if (!form.creator_id) return toast.error('Creator is required')
     const payload = {
       ...form,
+      is_short: true,
       creator_id: form.creator_id ? Number(form.creator_id) : undefined,
     }
     mutation.mutate(payload)
@@ -166,15 +166,6 @@ export function EpisodeForm({ seriesId, initial, onSaved, onCancel }) {
             }}
             hint={durationAuto ? 'Auto-detected from video · editable' : undefined}
           />
-          <label className="flex h-12 cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-surface-2 px-4 py-2 hover:border-border-strong self-end">
-            <span className="text-sm font-medium text-text-primary">Short episode</span>
-            <input
-              type="checkbox"
-              checked={form.is_short}
-              onChange={(e) => setForm((f) => ({ ...f, is_short: e.target.checked }))}
-              className="h-4 w-4 accent-accent"
-            />
-          </label>
           <div className="md:col-span-2">
             <Select
               label="Creator"

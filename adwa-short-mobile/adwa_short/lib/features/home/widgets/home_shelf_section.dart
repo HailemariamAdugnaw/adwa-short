@@ -12,10 +12,14 @@ class HomeShelfSection extends StatelessWidget {
     super.key,
     required this.shelf,
     this.onItemTap,
+    this.onWatchNow,
+    this.onSeeAll,
   });
 
   final Shelf shelf;
   final void Function(Series series)? onItemTap;
+  final void Function(Series series)? onWatchNow;
+  final VoidCallback? onSeeAll;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +55,7 @@ class HomeShelfSection extends StatelessWidget {
             ShelfBanner(
               items: shelf.items,
               onItemTap: onItemTap,
+              onWatchNow: onWatchNow,
             ),
           ],
         ),
@@ -60,6 +65,7 @@ class HomeShelfSection extends StatelessWidget {
       title: shelf.title,
       items: shelf.items,
       onItemTap: onItemTap,
+      onSeeAll: onSeeAll,
     );
   }
 }

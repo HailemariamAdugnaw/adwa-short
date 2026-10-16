@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -13,12 +15,14 @@ class ShelfBanner extends StatefulWidget {
     super.key,
     required this.items,
     this.onItemTap,
+    this.onWatchNow,
     this.autoPlay = true,
-    this.duration = const Duration(seconds: 6),
+    this.duration = const Duration(seconds: 5),
   });
 
   final List<Series> items;
   final void Function(Series)? onItemTap;
+  final void Function(Series)? onWatchNow;
   final bool autoPlay;
   final Duration duration;
 
@@ -29,7 +33,7 @@ class ShelfBanner extends StatefulWidget {
 class _ShelfBannerState extends State<ShelfBanner> {
   late final PageController _controller;
   int _index = 0;
-  int _nextPage = 0;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -39,12 +43,13 @@ class _ShelfBannerState extends State<ShelfBanner> {
   }
 
   void _scheduleNext() {
+    _timer?.cancel();
     if (!mounted || !widget.autoPlay || widget.items.length < 2) return;
-    Future.delayed(widget.duration, () {
+    _timer = Timer(widget.duration, () {
       if (!mounted) return;
-      _nextPage = (_index + 1) % widget.items.length;
+      final next = (_index + 1) % widget.items.length;
       _controller.animateToPage(
-        _nextPage,
+        next,
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeOutCubic,
       );
@@ -53,6 +58,7 @@ class _ShelfBannerState extends State<ShelfBanner> {
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -80,6 +86,9 @@ class _ShelfBannerState extends State<ShelfBanner> {
                   series: s,
                   onTap: widget.onItemTap != null
                       ? () => widget.onItemTap!(s)
+                      : null,
+                  onWatchNow: widget.onWatchNow != null
+                      ? () => widget.onWatchNow!(s)
                       : null,
                 ),
               );
@@ -113,10 +122,15 @@ class _ShelfBannerState extends State<ShelfBanner> {
 }
 
 class _BannerCard extends StatelessWidget {
-  const _BannerCard({required this.series, this.onTap});
+  const _BannerCard({
+    required this.series,
+    this.onTap,
+    this.onWatchNow,
+  });
 
   final Series series;
   final VoidCallback? onTap;
+  final VoidCallback? onWatchNow;
 
   @override
   Widget build(BuildContext context) {
@@ -180,43 +194,17 @@ class _BannerCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
-                  if (series.description.isNotEmpty)
-                    Text(
-                      series.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.body2,
-                    ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.bloodRed,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_arrow_rounded,
-                                color: AppColors.white, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Watch Now',
-                              style: AppTextStyles.label
-                                  .copyWith(color: AppColors.white),
-                            ),
-                          ],
-                        ),
-                      ),
+                      if (onWatchNow != null)
+                        _WatchNowButton(onTap: onWatchNow!),
                       if (series.totalEpisodes > 0) ...[
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Text(
-                          '${series.totalEpisodes} Episodes',
-                          style: AppTextStyles.caption,
+                          '${series.totalEpisodes} EP',
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.textSecondary),
                         ),
                       ],
                     ],
@@ -248,6 +236,50 @@ class _BannerCard extends StatelessWidget {
       child: Center(
         child: Icon(Icons.movie_outlined,
             color: AppColors.textTertiary, size: 48),
+      ),
+    );
+  }
+}
+
+class _WatchNowButton extends StatelessWidget {
+  const _WatchNowButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: AppColors.bloodRed,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.bloodRedGlow,
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.play_arrow_rounded,
+                color: AppColors.white, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              'Watch Now',
+              style: AppTextStyles.label.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

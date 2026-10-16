@@ -48,7 +48,7 @@ class SavedTab extends StatelessWidget {
           crossAxisCount: 3,
           mainAxisSpacing: 16,
           crossAxisSpacing: 12,
-          childAspectRatio: 0.52,
+          childAspectRatio: 0.48,
         ),
         itemCount: p.saved.length,
         itemBuilder: (_, i) {
@@ -90,7 +90,7 @@ class SavedTab extends StatelessWidget {
         crossAxisCount: 3,
         mainAxisSpacing: 16,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.52,
+        childAspectRatio: 0.48,
       ),
       itemCount: 9,
       itemBuilder: (_, __) => const LoadingShimmer(

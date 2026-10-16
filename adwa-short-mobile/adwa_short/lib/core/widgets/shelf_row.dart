@@ -12,7 +12,7 @@ class ShelfRow extends StatelessWidget {
     required this.items,
     this.onSeeAll,
     this.onItemTap,
-    this.posterWidth = 130,
+    this.maxItems = 9,
     this.accent = AppColors.bloodRed,
   });
 
@@ -20,12 +20,13 @@ class ShelfRow extends StatelessWidget {
   final List<Series> items;
   final VoidCallback? onSeeAll;
   final void Function(Series)? onItemTap;
-  final double posterWidth;
+  final int maxItems;
   final Color accent;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
+    final display = items.length > maxItems ? items.sublist(0, maxItems) : items;
     return Padding(
       padding: const EdgeInsets.only(top: 20),
       child: Column(
@@ -79,22 +80,24 @@ class ShelfRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: posterWidth * 1.5 + 44,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, i) {
-                final s = items[i];
-                return PosterCard(
-                  series: s,
-                  width: posterWidth,
-                  onTap: onItemTap != null ? () => onItemTap!(s) : null,
-                );
-              },
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 8,
+              childAspectRatio: 0.48,
             ),
+            itemCount: display.length,
+            itemBuilder: (_, i) {
+              final s = display[i];
+              return PosterCard(
+                series: s,
+                onTap: onItemTap != null ? () => onItemTap!(s) : null,
+              );
+            },
           ),
         ],
       ),
