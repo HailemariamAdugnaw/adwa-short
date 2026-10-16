@@ -72,7 +72,7 @@ class _ShelfBannerState extends State<ShelfBanner> {
     if (widget.items.isEmpty) return const SizedBox.shrink();
     final height = widget.height ??
         (widget.immersive
-            ? 440.0
+            ? 340.0
             : MediaQuery.of(context).size.width * 9 / 16 + 24);
     return SizedBox(
       height: height,

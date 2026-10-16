@@ -7,6 +7,7 @@ import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/poster_card.dart';
 import '../../../core/widgets/shelf_banner.dart';
+import '../../../models/category.dart';
 import '../../../models/series.dart';
 import '../../../models/shelf.dart';
 import '../providers/category_provider.dart';
@@ -34,17 +35,39 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _selectedTab = 'all';
+  static const double _heroHeight = 340.0;
+  static const double _tabBarHeight = 48.0;
+
+  String _selectedTab = 'popular';
+  final ScrollController _scrollController = ScrollController();
+  double _headerOpacity = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final shelves = context.read<ShelfProvider>();
       final cats = context.read<CategoryProvider>();
       if (shelves.status == ShelfLoadStatus.idle) shelves.load();
       if (cats.status == CategoryLoadStatus.idle) cats.load();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final offset = _scrollController.offset;
+    final opacity = (offset / _heroHeight).clamp(0.0, 1.0);
+    if ((opacity - _headerOpacity).abs() > 0.01) {
+      setState(() => _headerOpacity = opacity);
+    }
   }
 
   Future<void> _onRefresh() async {
@@ -63,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onTabSelected(String id) {
     setState(() => _selectedTab = id);
     final cat = context.read<CategoryProvider>();
-    if (id == 'all' || id == 'popular' || id == 'hot' || id == 'new') {
+    if (id == 'popular' || id == 'hot' || id == 'new') {
       cat.select('all');
     } else {
       cat.select(id);
@@ -73,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
+    final cat = context.watch<CategoryProvider>();
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: AppColors.black,
@@ -82,13 +106,21 @@ class _HomeScreenState extends State<HomeScreen> {
         edgeOffset: topInset,
         onRefresh: _onRefresh,
         child: CustomScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(child: _hero()),
-            SliverPadding(
-              padding: EdgeInsets.only(top: topInset),
-              sliver: _body(),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _StickyCategoryBarDelegate(
+                categories: cat.categories,
+                selectedId: _selectedTab,
+                onSelected: _onTabSelected,
+                statusBarHeight: topInset,
+                opacity: _headerOpacity,
+              ),
             ),
+            _body(),
             const SliverToBoxAdapter(child: SizedBox(height: 96)),
           ],
         ),
@@ -98,15 +130,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _hero() {
     final shelves = context.watch<ShelfProvider>();
-    final cat = context.watch<CategoryProvider>();
     final banner = shelves.bannerShelf;
-    const heroHeight = 440.0;
     final Widget heroChild;
     if (banner != null && banner.items.isNotEmpty) {
       heroChild = ShelfBanner(
         items: banner.items,
         immersive: true,
-        height: heroHeight,
+        height: _heroHeight,
         onItemTap: widget.onWatchSeries,
         onWatchNow: widget.onWatchSeries,
       );
@@ -123,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
     return SizedBox(
-      height: heroHeight,
+      height: _heroHeight,
       width: double.infinity,
       child: Stack(
         children: [
@@ -135,17 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: OverlaySearchBar(
               onTap: widget.onOpenSearch,
               onFilterTap: widget.onOpenSearch,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: MediaQuery.of(context).padding.top + 60,
-            child: CategoryTabBar(
-              categories: cat.categories,
-              selectedId: _selectedTab,
-              onSelected: _onTabSelected,
-              overlay: true,
             ),
           ),
         ],
@@ -247,5 +266,51 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
     }
+  }
+}
+
+class _StickyCategoryBarDelegate extends SliverPersistentHeaderDelegate {
+  _StickyCategoryBarDelegate({
+    required this.categories,
+    required this.selectedId,
+    required this.onSelected,
+    required this.statusBarHeight,
+    required this.opacity,
+  });
+
+  final List<AdwaCategory> categories;
+  final String selectedId;
+  final ValueChanged<String> onSelected;
+  final double statusBarHeight;
+  final double opacity;
+
+  @override
+  double get minExtent => statusBarHeight + _HomeScreenState._tabBarHeight;
+
+  @override
+  double get maxExtent => statusBarHeight + _HomeScreenState._tabBarHeight;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Color.lerp(AppColors.transparent, AppColors.black, opacity),
+      padding: EdgeInsets.only(top: statusBarHeight),
+      alignment: Alignment.bottomCenter,
+      child: CategoryTabBar(
+        categories: categories,
+        selectedId: selectedId,
+        onSelected: onSelected,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyCategoryBarDelegate oldDelegate) {
+    return categories != oldDelegate.categories ||
+        selectedId != oldDelegate.selectedId ||
+        onSelected != oldDelegate.onSelected ||
+        statusBarHeight != oldDelegate.statusBarHeight ||
+        opacity != oldDelegate.opacity;
   }
 }

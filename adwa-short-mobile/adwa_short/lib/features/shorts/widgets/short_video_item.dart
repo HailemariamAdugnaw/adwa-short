@@ -211,18 +211,15 @@ class _ShortVideoItemState extends State<ShortVideoItem> {
             _centerPlayIcon(),
           Positioned(
             right: 6,
-            top: 70,
-            bottom: 180,
+            bottom: 140,
             child: SizedBox(
-              width: 60,
-              child: Center(
-                child: RightActionBar(
-                  item: widget.item,
-                  onRate: widget.onRate,
-                  onShowEpisodes: widget.onShowEpisodes,
-                  onSave: widget.onSave,
-                  onShare: widget.onShare,
-                ),
+              width: 64,
+              child: RightActionBar(
+                item: widget.item,
+                onRate: widget.onRate,
+                onShowEpisodes: widget.onShowEpisodes,
+                onSave: widget.onSave,
+                onShare: widget.onShare,
               ),
             ),
           ),
