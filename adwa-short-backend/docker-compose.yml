@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adwa
+      POSTGRES_PASSWORD: adwa
+      POSTGRES_DB: adwa_short
+    ports:
+      - "5432:5432"
+    volumes:
+      - adwa_db:/var/lib/postgresql/data
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+asyncpg://adwa:adwa@db:5432/adwa_short
+      JWT_SECRET: change-me-in-production
+      JWT_ALG: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      REFRESH_TOKEN_EXPIRE_DAYS: "30"
+      UPLOAD_DIR: ./uploads
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+      MAX_DEVICES_PER_ACCOUNT: "2"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - upload_data:/app/uploads
+
+volumes:
+  adwa_db:
+  upload_data:

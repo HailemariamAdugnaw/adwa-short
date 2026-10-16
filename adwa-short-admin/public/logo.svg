@@ -1,0 +1,7 @@
+<svg width="180" height="48" viewBox="0 0 180 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="6" width="36" height="36" rx="8" fill="#0A0A0A" stroke="#2A2A2A" stroke-width="1.5"/>
+  <path d="M20 13L29 35H24L20 24L16 35H11L20 13Z" fill="#C8102E"/>
+  <text x="48" y="30" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="2" fill="#FFFFFF">ADWA</text>
+  <text x="120" y="30" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="2" fill="#C8102E">SHORT</text>
+  <rect x="48" y="36" width="80" height="3" fill="#C8102E"/>
+</svg>
