@@ -17,7 +17,7 @@ class CategoryProvider extends ChangeNotifier {
   CategoryLoadStatus _status = CategoryLoadStatus.idle;
   List<AdwaCategory> _categories = <AdwaCategory>[];
   String? _errorMessage;
-  String _selectedId = 'all';
+  String _selectedId = 'popular';
 
   CategorySeriesStatus _seriesStatus = CategorySeriesStatus.idle;
   List<Series> _filteredSeries = <Series>[];
@@ -32,44 +32,46 @@ class CategoryProvider extends ChangeNotifier {
   List<Series> get filteredSeries => _filteredSeries;
   String? get seriesError => _seriesError;
 
-  bool get isFiltering => _selectedId != 'all';
+  bool get isFiltering =>
+      _selectedId != 'all' && _selectedId != 'home';
 
-  AdwaCategory? get selected => _selectedId == 'all'
+  AdwaCategory? get selected => _selectedId == 'all' || _selectedId == 'home'
       ? null
-      : _categories
-          .where((AdwaCategory c) => c.id == _selectedId)
-          .cast<AdwaCategory?>()
-          .firstWhere((_) => true, orElse: () => null);
+      : (_selectedId == 'popular' ||
+                _selectedId == 'hot' ||
+                _selectedId == 'new'
+            ? null
+            : _categories
+                .where((AdwaCategory c) => c.id == _selectedId)
+                .cast<AdwaCategory?>()
+                .firstWhere((_) => true, orElse: () => null));
 
-  void select(String id) {
-    if (_selectedId == id) return;
+  void setShelfTab(String id, List<Series> items) {
     _selectedId = id;
+    _filteredSeries = List<Series>.unmodifiable(items);
+    _seriesStatus = CategorySeriesStatus.success;
+    _seriesError = null;
     notifyListeners();
-    if (_selectedId == 'all') {
-      _filteredSeries = <Series>[];
-      _seriesStatus = CategorySeriesStatus.idle;
-      _seriesError = null;
-      notifyListeners();
-    } else {
-      loadFilteredSeries();
-    }
   }
 
-  Future<void> loadFilteredSeries({bool refresh = false}) async {
-    if (_selectedId == 'all') {
-      _filteredSeries = <Series>[];
-      _seriesStatus = CategorySeriesStatus.idle;
-      _seriesError = null;
-      notifyListeners();
-      return;
-    }
-    _seriesStatus =
-        refresh ? CategorySeriesStatus.refreshing : CategorySeriesStatus.loading;
+  void clearFilter() {
+    _selectedId = 'all';
+    _filteredSeries = <Series>[];
+    _seriesStatus = CategorySeriesStatus.idle;
+    _seriesError = null;
+    notifyListeners();
+  }
+
+  Future<void> selectCategory(String id, {bool refresh = false}) async {
+    _selectedId = id;
+    _seriesStatus = refresh
+        ? CategorySeriesStatus.refreshing
+        : CategorySeriesStatus.loading;
     notifyListeners();
     try {
       final List<Series> list = await _api.get<List<Series>>(
         ApiConstants.seriesList,
-        query: {'category_id': _selectedId, 'limit': '100'},
+        query: {'category_id': id, 'limit': '100'},
         parser: (json) {
           if (json is List) {
             return json
@@ -97,6 +99,15 @@ class CategoryProvider extends ChangeNotifier {
       _seriesStatus = CategorySeriesStatus.error;
     }
     notifyListeners();
+  }
+
+  Future<void> loadFilteredSeries({bool refresh = false}) async {
+    if (_selectedId == 'all' || _selectedId == 'home' ||
+        _selectedId == 'popular' || _selectedId == 'hot' ||
+        _selectedId == 'new') {
+      return;
+    }
+    await selectCategory(_selectedId, refresh: refresh);
   }
 
   Future<void> load() async {

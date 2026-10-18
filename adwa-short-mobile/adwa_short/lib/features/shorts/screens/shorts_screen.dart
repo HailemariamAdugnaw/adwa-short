@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/router/app_router.dart';
@@ -19,12 +20,16 @@ import '../widgets/short_video_item.dart';
 class ShortsScreen extends StatefulWidget {
   const ShortsScreen({
     super.key,
+    this.onBack,
+    this.active = true,
     this.onWatchNow,
     this.onOpenSearch,
     this.onOpenSeries,
     this.onPlayEpisode,
   });
 
+  final VoidCallback? onBack;
+  final bool active;
   final void Function(String seriesId)? onWatchNow;
   final VoidCallback? onOpenSearch;
   final void Function(String seriesId)? onOpenSeries;
@@ -35,8 +40,10 @@ class ShortsScreen extends StatefulWidget {
 }
 
 class _ShortsScreenState extends State<ShortsScreen> {
-  final PageController _pageController =
-      PageController(initialPage: 0, viewportFraction: 1.0);
+  final PageController _pageController = PageController(
+    initialPage: 0,
+    viewportFraction: 1.0,
+  );
   int _current = 0;
 
   @override
@@ -104,12 +111,16 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   void _showShareToast(ShortItem item) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(
+    final url =
+        'https://adwashort.app/series/${item.seriesId}/episode/${item.episodeId ?? item.id}';
+    final text =
+        '${item.seriesTitle ?? item.title} - EP.${item.episodeNumber ?? ''}\nWatch on ADWA SHORT: $url';
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         backgroundColor: AppColors.surfaceElevated,
         content: Text(
-          'Sharing "${item.title}"…',
+          'Link copied to clipboard',
           style: AppTextStyles.body3.copyWith(color: AppColors.white),
         ),
         duration: const Duration(seconds: 2),
@@ -118,27 +129,51 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   void _showEpisodesSheet(ShortItem item) {
-    if (widget.onPlayEpisode == null && widget.onOpenSeries == null) {
-      return;
-    }
     EpisodeSelectorSheet.show(
       context,
       seriesId: item.seriesId,
       currentEpisodeId: item.episodeId,
       currentEpisodeNumber: item.episodeNumber,
-      onEpisodeSelected: (episode) {
-        final series = Series(
-          id: item.seriesId,
-          title: item.seriesTitle ?? item.title,
-          episodes: [episode],
-        );
-        if (widget.onPlayEpisode != null) {
-          widget.onPlayEpisode!(series, episode);
-        } else if (widget.onOpenSeries != null) {
-          widget.onOpenSeries!(item.seriesId);
-        }
-      },
+      onEpisodeSelected: (episode) => _playEpisodeInFeed(item, episode),
     );
+  }
+
+  void _playEpisodeInFeed(ShortItem current, Episode episode) {
+    final videoUrl = episode.videoUrl;
+    context.read<ShortsProvider>().replaceItem(
+      _current,
+      current.copyWith(
+        id: episode.id,
+        episodeId: episode.id,
+        title: episode.title.isNotEmpty ? episode.title : current.title,
+        verticalVideoUrl: (videoUrl != null && videoUrl.isNotEmpty)
+            ? videoUrl
+            : current.verticalVideoUrl,
+        description: episode.description.isNotEmpty
+            ? episode.description
+            : current.description,
+        episodeNumber: episode.number,
+        thumbnailUrl: episode.thumbnailUrl ?? current.thumbnailUrl,
+        isAccessible: episode.effectivelyAccessible,
+        accessReason: episode.accessReason ?? current.accessReason,
+        averageRating: episode.averageRating ?? current.averageRating,
+        ratingCount: episode.ratingCount ?? current.ratingCount,
+      ),
+    );
+  }
+
+  void _watchFull(ShortItem item) {
+    final episode = _toEpisode(item);
+    if (episode == null || widget.onPlayEpisode == null) return;
+    final series = Series(
+      id: item.seriesId,
+      title: item.seriesTitle ?? item.title,
+      description: item.description,
+      posterUrl: item.thumbnailUrl,
+      totalEpisodes: item.totalEpisodes,
+      episodes: [episode],
+    );
+    widget.onPlayEpisode!(series, episode);
   }
 
   Episode? _toEpisode(ShortItem item) {
@@ -151,78 +186,18 @@ class _ShortsScreenState extends State<ShortsScreen> {
       description: item.description,
       thumbnailUrl: item.thumbnailUrl,
       videoUrl: item.verticalVideoUrl,
+      durationSeconds: item.durationSeconds,
       averageRating: item.averageRating,
       ratingCount: item.ratingCount,
+      isAccessible: item.isAccessible,
+      accessReason: item.accessReason,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.watch<ShortsProvider>();
-    return Scaffold(
-      backgroundColor: AppColors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          _body(p),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: _topActionButtons(),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _topActionButtons() {
-    return [
-      GestureDetector(
-        onTap: _openReviewsForCurrent,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.35),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.reviews_outlined,
-              color: AppColors.white, size: 20),
-        ),
-      ),
-      const SizedBox(width: 8),
-      GestureDetector(
-        onTap: _openSearch,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.35),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.search_rounded,
-              color: AppColors.white, size: 22),
-        ),
-      ),
-    ];
-  }
-
-  void _openReviewsForCurrent() {
-    final p = context.read<ShortsProvider>();
-    if (_current < 0 || _current >= p.items.length) return;
-    _openReviews(p.items[_current]);
+    return ColoredBox(color: AppColors.black, child: _body(p));
   }
 
   Widget _body(ShortsProvider p) {
@@ -266,16 +241,21 @@ class _ShortsScreenState extends State<ShortsScreen> {
           );
         }
         final item = p.items[i];
+        if (!widget.active || i != _current) {
+          return Container(color: AppColors.black);
+        }
         return ShortVideoItem(
           item: item,
-          active: i == _current,
           totalEpisodes: item.totalEpisodes,
           isAccessible: item.isAccessible,
           accessReason: item.accessReason,
           onSave: () => p.toggleSave(i),
           onShowEpisodes: () => _showEpisodesSheet(item),
           onRate: () => _openRating(item),
+          onReviews: () => _openReviews(item),
           onShare: () => _showShareToast(item),
+          onSearch: _openSearch,
+          onWatchFull: () => _watchFull(item),
           onBuyCoins: _openCoins,
           onBuyPass: _openPasses,
           onSubscribe: _openSubscriptions,

@@ -61,10 +61,9 @@ class Episode {
       description: json['description']?.toString() ?? '',
       thumbnailUrl:
           json['thumbnail_url']?.toString() ?? json['poster_url']?.toString(),
-      videoUrl:
-          json['video_url']?.toString() ?? json['hls_url']?.toString(),
-      durationSeconds: _asInt(json['duration_seconds']) ??
-          _asInt(json['duration']) ?? 0,
+      videoUrl: json['video_url']?.toString() ?? json['hls_url']?.toString(),
+      durationSeconds:
+          _asInt(json['duration_seconds']) ?? _asInt(json['duration']) ?? 0,
       isFree: json['is_free'] == true,
       isLocked: json['is_locked'] == true,
       accessible: json['accessible'] == true,
@@ -74,46 +73,52 @@ class Episode {
       accessReason: json['access_reason']?.toString(),
       creatorId: _asInt(json['creator_id']),
       coinCost: _asInt(json['coin_cost']),
-      viewsCount: _asInt(json['views_count']) ?? _asInt(json['view_count']) ?? 0,
-      likesCount: _asInt(json['likes_count']) ?? _asInt(json['like_count']) ?? 0,
-      commentsCount: _asInt(json['comments_count']) ??
-          _asInt(json['comment_count']) ?? 0,
-      averageRating: _asDouble(json['average_rating']) ??
-          _asDouble(json['rating']),
+      viewsCount:
+          _asInt(json['views_count']) ?? _asInt(json['view_count']) ?? 0,
+      likesCount:
+          _asInt(json['likes_count']) ?? _asInt(json['like_count']) ?? 0,
+      commentsCount:
+          _asInt(json['comments_count']) ?? _asInt(json['comment_count']) ?? 0,
+      averageRating:
+          _asDouble(json['average_rating']) ?? _asDouble(json['rating']),
       ratingCount: _asInt(json['rating_count']),
       reviewCount: _asInt(json['review_count']),
-      watchedProgress: _asDouble(json['watched_progress']) ??
-          _asDouble(json['progress']) ?? 0,
-      lastPosition: _asInt(json['last_position']) ??
-          _asInt(json['last_position_seconds']) ?? 0,
+      watchedProgress:
+          _asDouble(json['watched_progress']) ??
+          _asDouble(json['progress']) ??
+          0,
+      lastPosition:
+          _asInt(json['last_position']) ??
+          _asInt(json['last_position_seconds']) ??
+          0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'series_id': seriesId,
-        'number': number,
-        'title': title,
-        'description': description,
-        'thumbnail_url': thumbnailUrl,
-        'video_url': videoUrl,
-        'duration_seconds': durationSeconds,
-        'is_free': isFree,
-        'is_locked': isLocked,
-        'accessible': accessible,
-        'is_accessible': isAccessible,
-        'access_reason': accessReason,
-        'creator_id': creatorId,
-        'coin_cost': coinCost,
-        'views_count': viewsCount,
-        'likes_count': likesCount,
-        'comments_count': commentsCount,
-        'average_rating': averageRating,
-        'rating_count': ratingCount,
-        'review_count': reviewCount,
-        'watched_progress': watchedProgress,
-        'last_position': lastPosition,
-      };
+    'id': id,
+    'series_id': seriesId,
+    'number': number,
+    'title': title,
+    'description': description,
+    'thumbnail_url': thumbnailUrl,
+    'video_url': videoUrl,
+    'duration_seconds': durationSeconds,
+    'is_free': isFree,
+    'is_locked': isLocked,
+    'accessible': accessible,
+    'is_accessible': isAccessible,
+    'access_reason': accessReason,
+    'creator_id': creatorId,
+    'coin_cost': coinCost,
+    'views_count': viewsCount,
+    'likes_count': likesCount,
+    'comments_count': commentsCount,
+    'average_rating': averageRating,
+    'rating_count': ratingCount,
+    'review_count': reviewCount,
+    'watched_progress': watchedProgress,
+    'last_position': lastPosition,
+  };
 
   Episode copyWith({
     String? id,
@@ -139,32 +144,31 @@ class Episode {
     int? reviewCount,
     double? watchedProgress,
     int? lastPosition,
-  }) =>
-      Episode(
-        id: id ?? this.id,
-        seriesId: seriesId ?? this.seriesId,
-        number: number ?? this.number,
-        title: title ?? this.title,
-        description: description ?? this.description,
-        thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
-        videoUrl: videoUrl ?? this.videoUrl,
-        durationSeconds: durationSeconds ?? this.durationSeconds,
-        isFree: isFree ?? this.isFree,
-        isLocked: isLocked ?? this.isLocked,
-        accessible: accessible ?? this.accessible,
-        isAccessible: isAccessible ?? this.isAccessible,
-        accessReason: accessReason ?? this.accessReason,
-        creatorId: creatorId ?? this.creatorId,
-        coinCost: coinCost ?? this.coinCost,
-        viewsCount: viewsCount ?? this.viewsCount,
-        likesCount: likesCount ?? this.likesCount,
-        commentsCount: commentsCount ?? this.commentsCount,
-        averageRating: averageRating ?? this.averageRating,
-        ratingCount: ratingCount ?? this.ratingCount,
-        reviewCount: reviewCount ?? this.reviewCount,
-        watchedProgress: watchedProgress ?? this.watchedProgress,
-        lastPosition: lastPosition ?? this.lastPosition,
-      );
+  }) => Episode(
+    id: id ?? this.id,
+    seriesId: seriesId ?? this.seriesId,
+    number: number ?? this.number,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+    videoUrl: videoUrl ?? this.videoUrl,
+    durationSeconds: durationSeconds ?? this.durationSeconds,
+    isFree: isFree ?? this.isFree,
+    isLocked: isLocked ?? this.isLocked,
+    accessible: accessible ?? this.accessible,
+    isAccessible: isAccessible ?? this.isAccessible,
+    accessReason: accessReason ?? this.accessReason,
+    creatorId: creatorId ?? this.creatorId,
+    coinCost: coinCost ?? this.coinCost,
+    viewsCount: viewsCount ?? this.viewsCount,
+    likesCount: likesCount ?? this.likesCount,
+    commentsCount: commentsCount ?? this.commentsCount,
+    averageRating: averageRating ?? this.averageRating,
+    ratingCount: ratingCount ?? this.ratingCount,
+    reviewCount: reviewCount ?? this.reviewCount,
+    watchedProgress: watchedProgress ?? this.watchedProgress,
+    lastPosition: lastPosition ?? this.lastPosition,
+  );
 
   String get metaLabel {
     final mins = (durationSeconds / 60).ceil();
@@ -175,7 +179,7 @@ class Episode {
 int? _asInt(dynamic v) {
   if (v is int) return v;
   if (v is num) return v.toInt();
-  if (v is String) return int.tryParse(v);
+  if (v is String) return num.tryParse(v)?.toInt();
   return null;
 }
 

@@ -10,11 +10,15 @@ class ShortBottomInfo extends StatefulWidget {
     required this.item,
     this.totalEpisodes,
     this.onShowEpisodes,
+    this.previewMode = false,
+    this.onWatchFull,
   });
 
   final ShortItem item;
   final int? totalEpisodes;
   final VoidCallback? onShowEpisodes;
+  final bool previewMode;
+  final VoidCallback? onWatchFull;
 
   @override
   State<ShortBottomInfo> createState() => _ShortBottomInfoState();
@@ -49,9 +53,7 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
           item.title,
           style: AppTextStyles.h2.copyWith(
             fontWeight: FontWeight.w800,
-            shadows: const [
-              Shadow(color: Colors.black87, blurRadius: 6),
-            ],
+            shadows: const [Shadow(color: Colors.black87, blurRadius: 6)],
           ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -60,11 +62,52 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
           const SizedBox(height: 6),
           _descriptionRow(item.description),
         ],
-        if (currentEp > 0 || total > 0) ...[
+        if (widget.previewMode || currentEp > 0 || total > 0) ...[
           const SizedBox(height: 12),
-          _episodeBar(currentEp, total),
+          widget.previewMode
+              ? _watchFullButton()
+              : _episodeBar(currentEp, total),
         ],
       ],
+    );
+  }
+
+  Widget _watchFullButton() {
+    return GestureDetector(
+      onTap: widget.onWatchFull,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.bloodRed,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 8)],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.play_arrow_rounded,
+              color: AppColors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Watch Full',
+              style: AppTextStyles.label.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.white,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -78,9 +121,7 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
             description,
             style: AppTextStyles.body2.copyWith(
               color: AppColors.white.withValues(alpha: 0.92),
-              shadows: const [
-                Shadow(color: Colors.black87, blurRadius: 4),
-              ],
+              shadows: const [Shadow(color: Colors.black87, blurRadius: 4)],
             ),
             maxLines: maxLines,
             overflow: TextOverflow.ellipsis,
@@ -120,8 +161,11 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.layers_rounded,
-                color: AppColors.bloodRedBright, size: 16),
+            const Icon(
+              Icons.layers_rounded,
+              color: AppColors.bloodRedBright,
+              size: 16,
+            ),
             const SizedBox(width: 8),
             Text(
               'EP.$current / ${total > 0 ? total : '?'} EP',
@@ -132,8 +176,11 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(Icons.chevron_right_rounded,
-                color: AppColors.white, size: 18),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.white,
+              size: 18,
+            ),
           ],
         ),
       ),

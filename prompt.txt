@@ -1,0 +1,39 @@
+Please refactor and unify the Video Player logic and layout across the Home Screen Navigation and the Shorts Tab in the ADWA SHORT application to match platforms like GoodShort and ShortMax:
+1. Bottom Navigation Bar & Layout Behavior Difference:
+- When launched from Home Screen Cards / Series Start: The Video Player Screen must navigate into a Full-Screen vertical layout and HIDE the bottom navigation bar.
+- When inside the Shorts Tab: The Video Player must KEEP the bottom navigation bar visible (it should not hide the navigation bar or act as a standalone pushed screen), while retaining all identical player overlay components.
+2. Shared Video Player Overlay Components (Identical in both Shorts Tab & Full Series Player):
+- Full-Screen Vertical Video Background: Vertical video layout with a dark gradient overlay at the bottom for text readability.
+- Top Overlay Bar: Include the Search Icon positioned at the top-right corner.
+- Right-Side Action Bar (Floating vertically on the right bottom):
+  - Star Button: Star icon with formatted count (e.g., 20.6K).
+  - Episodes Button: Stacked-layers icon labeled 'Episodes' that opens the episode selector bottom sheet when tapped.
+  - Save Button: Bookmark icon labeled 'Save' to add/remove from My List.
+  - Share Button: Share arrow icon labeled 'Share'.
+- Bottom Information & Controls Area:
+  - Video Title: Bold white text at the bottom-left.
+  - Description & 'More': Short 1–2 line summary with a clickable 'More' text link.
+  - Episode Bar / Quick Selector: Compact rounded bar showing current episode progress (e.g., EP.1 / 67 EP) with a forward arrow icon (>) on the right to open the episode sheet.
+3. Playback State, Scrubber & Duration Fixes (Fix 00:00 / 00:00 Bug):
+- Real-Time Duration: Connect the video controller position and duration listeners properly to the state. Display the live current playback time on the left and the total video duration on the right (e.g., 00:15 / 01:30).
+- Interactive Scrubber / Progress Bar: Ensure the red bottom seekbar accurately reflects playback progress and allows smooth scrubbing/seeking forward or backward.
+- Play / Pause Toggle: Ensure tapping anywhere on the video screen toggles Play and Pause states effortlessly.
+Please write clean, synchronized component code implementing these exact layout and behavior rules.
+
+Please update the 'Shorts' Tab vs. Full Series Video Player Screen behavior in the ADWA SHORT application with this key distinction:
+1. 'Shorts' Tab Specific UI (Preview Mode):
+- Bottom Navigation Bar: Keep the main app bottom navigation bar VISIBLE.
+- Action Button ('Watch Full' instead of Episode Bar): In the Shorts tab, replace the compact episode status bar with a prominent 'Watch Full' / 'Watch Drama' button featuring a play icon and forward arrow (>).
+- Navigation Trigger: When the user taps the 'Watch Full' button (or 'Watch Drama'), it must launch the Full-Screen Video Player Screen (hiding the bottom navigation bar and entering full series playback mode, starting at EP.1 or the last watched episode).
+2. Full Series Video Player Screen (Full Watch Mode - Launched from Cards or 'Watch Full'):
+- Bottom Navigation Bar: HIDDEN for an immersive full-screen experience.
+- Episode Selector Bar: Displays the compact rounded bar showing current progress (e.g., EP.1 / 67 EP) with a forward arrow (>) that opens the episode selector bottom sheet.
+3. Shared UI Components across Both Views:
+- Top Overlay Bar: Search and review Icon at top-right.
+- Right-Side Action Bar (Bottom-Right Floating): Star button, Episodes button, Save button, and Share button.
+- Bottom Info: Bold Video Title, Description with clickable 'More' text.
+- Playback & Controls Fixes:
+  - Fix the 00:00 / 00:00 bug by connecting real-time video position and duration state.
+  - Interactive bottom scrubber/progress bar for smooth seeking.
+  - Tap-to-toggle Play and Pause functionality.
+Please update the component logic and navigation flow matching these specifications.

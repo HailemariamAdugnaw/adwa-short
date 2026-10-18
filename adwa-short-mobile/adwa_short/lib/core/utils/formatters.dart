@@ -51,6 +51,17 @@ class Formatters {
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 
+  static String playbackClock(Duration d) {
+    if (d.inMilliseconds < 0) return '00:00';
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    final mm = m.toString().padLeft(2, '0');
+    final ss = s.toString().padLeft(2, '0');
+    if (h > 0) return '${h.toString().padLeft(2, '0')}:$mm:$ss';
+    return '$mm:$ss';
+  }
+
   static String shortDuration(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;

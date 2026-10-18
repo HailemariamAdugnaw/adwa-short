@@ -170,10 +170,13 @@ class ShortsFeedItem(BaseModel):
     series_id: int
     title: str
     series_title: str
+    description: Optional[str] = None
     vertical_video_url: Optional[str] = None
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     duration_seconds: int
+    episode_number: int = 0
+    total_episodes: int = 0
     view_count: int
     coin_cost: int
     is_short: bool = False

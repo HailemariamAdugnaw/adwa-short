@@ -332,7 +332,19 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 icon: const Icon(Icons.bookmark_add_outlined,
                     color: AppColors.white),
                 onPressed: () async {
-                  final ok = await provider.toggleSave();
+                  if (series.episodes.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No episodes available to save'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                    return;
+                  }
+                  final ok = await provider.toggleSave(
+                    episodeId: series.episodes.first.id,
+                    currentlySaved: false,
+                  );
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

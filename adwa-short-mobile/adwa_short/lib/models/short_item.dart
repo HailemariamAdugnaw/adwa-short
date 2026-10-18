@@ -18,6 +18,7 @@ class ShortItem {
     this.averageRating,
     this.ratingCount,
     this.thumbnailUrl,
+    this.durationSeconds = 0,
   });
 
   final String id;
@@ -38,6 +39,7 @@ class ShortItem {
   final double? averageRating;
   final int? ratingCount;
   final String? thumbnailUrl;
+  final int durationSeconds;
 
   bool get isLocked => !isAccessible;
 
@@ -94,6 +96,9 @@ class ShortItem {
       ratingCount: _asInt(json['rating_count']),
       thumbnailUrl:
           json['thumbnail_url']?.toString() ?? json['poster_url']?.toString(),
+      durationSeconds: _asInt(json['duration_seconds']) ??
+          _asInt(json['duration']) ??
+          0,
     );
   }
 
@@ -116,6 +121,7 @@ class ShortItem {
         'average_rating': averageRating,
         'rating_count': ratingCount,
         'thumbnail_url': thumbnailUrl,
+        'duration_seconds': durationSeconds,
       };
 
   ShortItem copyWith({
@@ -137,6 +143,7 @@ class ShortItem {
     double? averageRating,
     int? ratingCount,
     String? thumbnailUrl,
+    int? durationSeconds,
   }) =>
       ShortItem(
         id: id ?? this.id,
@@ -157,6 +164,7 @@ class ShortItem {
         averageRating: averageRating ?? this.averageRating,
         ratingCount: ratingCount ?? this.ratingCount,
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+        durationSeconds: durationSeconds ?? this.durationSeconds,
       );
 }
 
@@ -199,7 +207,7 @@ class ShortsFeed {
 int? _asInt(dynamic v) {
   if (v is int) return v;
   if (v is num) return v.toInt();
-  if (v is String) return int.tryParse(v);
+  if (v is String) return num.tryParse(v)?.toInt();
   return null;
 }
 

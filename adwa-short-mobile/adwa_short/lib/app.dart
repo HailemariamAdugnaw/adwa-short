@@ -46,26 +46,17 @@ class AdwaShortApp extends StatelessWidget {
   Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case AppRoutes.splash:
-        return MaterialPageRoute(
-          builder: (context) => const SplashScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const SplashScreen());
       case AppRoutes.login:
-        return MaterialPageRoute(
-          builder: (context) => const LoginScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const LoginScreen());
       case AppRoutes.register:
-        return MaterialPageRoute(
-          builder: (context) => const RegisterScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const RegisterScreen());
       case AppRoutes.main:
-        return MaterialPageRoute(
-          builder: (context) => const MainShell(),
-        );
+        return MaterialPageRoute(builder: (context) => const MainShell());
       case AppRoutes.search:
         return MaterialPageRoute(
-          builder: (context) => SearchScreen(
-            onOpenSeries: (s) => _openSeriesDetail(context, s),
-          ),
+          builder: (context) =>
+              SearchScreen(onOpenSeries: (s) => _openSeriesDetail(context, s)),
         );
       case AppRoutes.seriesDetail:
         final args = settings.arguments;
@@ -104,36 +95,25 @@ class AdwaShortApp extends StatelessWidget {
           builder: (context) => WalletScreen(
             onBuyCoins: () =>
                 Navigator.of(context).pushNamed(AppRoutes.coinStore),
-            onBuyPass: () =>
-                Navigator.of(context).pushNamed(AppRoutes.passes),
+            onBuyPass: () => Navigator.of(context).pushNamed(AppRoutes.passes),
             onSubscribe: () =>
                 Navigator.of(context).pushNamed(AppRoutes.subscriptions),
           ),
         );
       case AppRoutes.coinStore:
-        return MaterialPageRoute(
-          builder: (context) => const CoinStoreScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const CoinStoreScreen());
       case AppRoutes.passes:
-        return MaterialPageRoute(
-          builder: (context) => const PassesScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const PassesScreen());
       case AppRoutes.subscriptions:
         return MaterialPageRoute(
           builder: (context) => const SubscriptionsScreen(),
         );
       case AppRoutes.loyalty:
-        return MaterialPageRoute(
-          builder: (context) => const LoyaltyScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const LoyaltyScreen());
       case AppRoutes.devices:
-        return MaterialPageRoute(
-          builder: (context) => const DevicesScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const DevicesScreen());
       case AppRoutes.settings:
-        return MaterialPageRoute(
-          builder: (context) => const SettingsScreen(),
-        );
+        return MaterialPageRoute(builder: (context) => const SettingsScreen());
       case AppRoutes.profile:
         return MaterialPageRoute(
           builder: (context) => ProfileScreen(
@@ -141,8 +121,7 @@ class AdwaShortApp extends StatelessWidget {
                 Navigator.of(context).pushNamed(AppRoutes.wallet),
             onOpenCoinStore: () =>
                 Navigator.of(context).pushNamed(AppRoutes.coinStore),
-            onBuyPass: () =>
-                Navigator.of(context).pushNamed(AppRoutes.passes),
+            onBuyPass: () => Navigator.of(context).pushNamed(AppRoutes.passes),
             onSubscribe: () =>
                 Navigator.of(context).pushNamed(AppRoutes.subscriptions),
             onOpenLoyalty: () =>
@@ -163,7 +142,10 @@ class AdwaShortApp extends StatelessWidget {
   }
 
   void _openEpisodePlayer(
-      BuildContext context, Series series, Episode episode) {
+    BuildContext context,
+    Series series,
+    Episode episode,
+  ) {
     Navigator.of(context).pushNamed(
       AppRoutes.episodePlayer,
       arguments: {'series': series, 'episode': episode},
@@ -213,35 +195,41 @@ class _MainShellState extends State<MainShell> {
           HomeScreen(
             onOpenSearch: () =>
                 Navigator.of(context).pushNamed(AppRoutes.search),
-            onOpenSeries: (s) => Navigator.of(context)
-                .pushNamed(AppRoutes.seriesDetail, arguments: s.id),
+            onOpenSeries: (s) =>
+                Navigator.of(context)
+                    .pushNamed(AppRoutes.seriesDetail, arguments: s.id),
             onWatchSeries: (s) => _watchSeries(s),
           ),
           ShortsScreen(
-            onWatchNow: (seriesId) => Navigator.of(context)
-                .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
+            onBack: () => _goTo(0),
+            active: _index == 1,
+            onWatchNow: (seriesId) =>
+                Navigator.of(context)
+                    .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
             onOpenSearch: () =>
                 Navigator.of(context).pushNamed(AppRoutes.search),
-            onOpenSeries: (seriesId) => Navigator.of(context)
-                .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
+            onOpenSeries: (seriesId) =>
+                Navigator.of(context)
+                    .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
             onPlayEpisode: (series, episode) => Navigator.of(context).pushNamed(
               AppRoutes.episodePlayer,
               arguments: {'series': series, 'episode': episode},
             ),
           ),
           MyListScreen(
-            onOpenSeries: (s) => Navigator.of(context)
-                .pushNamed(AppRoutes.seriesDetail, arguments: s.id),
-            onOpenEpisode: (seriesId, _) => Navigator.of(context)
-                .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
+            onOpenSeries: (s) =>
+                Navigator.of(context)
+                    .pushNamed(AppRoutes.seriesDetail, arguments: s.id),
+            onOpenEpisode: (seriesId, _) =>
+                Navigator.of(context)
+                    .pushNamed(AppRoutes.seriesDetail, arguments: seriesId),
           ),
           ProfileScreen(
             onOpenWallet: () =>
                 Navigator.of(context).pushNamed(AppRoutes.wallet),
             onOpenCoinStore: () =>
                 Navigator.of(context).pushNamed(AppRoutes.coinStore),
-            onBuyPass: () =>
-                Navigator.of(context).pushNamed(AppRoutes.passes),
+            onBuyPass: () => Navigator.of(context).pushNamed(AppRoutes.passes),
             onSubscribe: () =>
                 Navigator.of(context).pushNamed(AppRoutes.subscriptions),
             onOpenLoyalty: () =>
@@ -253,10 +241,7 @@ class _MainShellState extends State<MainShell> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _index,
-        onTap: _goTo,
-      ),
+      bottomNavigationBar: BottomNavBar(currentIndex: _index, onTap: _goTo),
     );
   }
 

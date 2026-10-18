@@ -96,4 +96,10 @@ class ShortsProvider extends ChangeNotifier {
     _items[index] = original.copyWith(isAccessible: true, accessReason: 'free');
     notifyListeners();
   }
+
+  void replaceItem(int index, ShortItem item) {
+    if (index < 0 || index >= _items.length) return;
+    _items[index] = item;
+    notifyListeners();
+  }
 }

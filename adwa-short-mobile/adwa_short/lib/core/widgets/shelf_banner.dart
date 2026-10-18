@@ -6,9 +6,7 @@ import 'package:flutter/material.dart';
 import '../../models/series.dart';
 import '../network/api_client.dart';
 import '../theme/colors.dart';
-import '../theme/text_styles.dart';
 import 'loading_shimmer.dart';
-import 'tag_chip.dart';
 
 class ShelfBanner extends StatefulWidget {
   const ShelfBanner({
@@ -94,9 +92,6 @@ class _ShelfBannerState extends State<ShelfBanner> {
                       onTap: widget.onItemTap != null
                           ? () => widget.onItemTap!(s)
                           : null,
-                      onWatchNow: widget.onWatchNow != null
-                          ? () => widget.onWatchNow!(s)
-                          : null,
                     )
                   : Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -105,9 +100,6 @@ class _ShelfBannerState extends State<ShelfBanner> {
                         immersive: false,
                         onTap: widget.onItemTap != null
                             ? () => widget.onItemTap!(s)
-                            : null,
-                        onWatchNow: widget.onWatchNow != null
-                            ? () => widget.onWatchNow!(s)
                             : null,
                       ),
                     );
@@ -153,13 +145,11 @@ class _BannerCard extends StatelessWidget {
     required this.series,
     required this.immersive,
     this.onTap,
-    this.onWatchNow,
   });
 
   final Series series;
   final bool immersive;
   final VoidCallback? onTap;
-  final VoidCallback? onWatchNow;
 
   @override
   Widget build(BuildContext context) {
@@ -197,72 +187,11 @@ class _BannerCard extends StatelessWidget {
             ),
           ),
         ),
-        if (!immersive)
-          Positioned(
-            top: 12,
-            left: 12,
-            child: Wrap(
-              spacing: 6,
-              children: [
-                if (series.isHot) const TagChip.hot(),
-                if (series.isVip) const TagChip.vip(),
-                if (series.isExclusive) const TagChip.exclusive(),
-                if (series.isNewRelease) const TagChip.newRelease(),
-              ],
-            ),
-          ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: immersive ? 36 : 16,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                series.title,
-                style: immersive
-                    ? const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        height: 1.25,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black54,
-                            blurRadius: 12,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      )
-                    : AppTextStyles.h1,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (onWatchNow != null) _WatchNowButton(onTap: onWatchNow!),
-                  if (series.totalEpisodes > 0) ...[
-                    const SizedBox(width: 10),
-                    Text(
-                      '${series.totalEpisodes} EP',
-                      style: AppTextStyles.caption.copyWith(
-                        color: immersive
-                            ? Colors.white.withValues(alpha: 0.85)
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
       ],
     );
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: immersive
           ? card
           : ClipRRect(
@@ -290,50 +219,6 @@ class _BannerCard extends StatelessWidget {
       child: Center(
         child: Icon(Icons.movie_outlined,
             color: AppColors.textTertiary, size: 48),
-      ),
-    );
-  }
-}
-
-class _WatchNowButton extends StatelessWidget {
-  const _WatchNowButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(
-          color: AppColors.bloodRed,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.bloodRedGlow,
-              blurRadius: 12,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.play_arrow_rounded,
-                color: AppColors.white, size: 18),
-            const SizedBox(width: 6),
-            Text(
-              'Watch Now',
-              style: AppTextStyles.label.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

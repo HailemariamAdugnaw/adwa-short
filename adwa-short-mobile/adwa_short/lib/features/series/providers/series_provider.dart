@@ -52,15 +52,20 @@ class SeriesProvider extends ChangeNotifier {
     return AccessCheck.fromJson(json);
   }
 
-  Future<bool> toggleSave() async {
-    final s = _series;
-    if (s == null) return false;
+  Future<bool> toggleSave({required String episodeId, bool currentlySaved = false}) async {
     try {
-      await _api.post(
-        ApiConstants.engagementSave,
-        body: {'series_id': s.id},
-        parser: (j) => j,
-      );
+      if (currentlySaved) {
+        await _api.delete(
+          '${ApiConstants.engagementSave}/$episodeId',
+          parser: (j) => j,
+        );
+      } else {
+        await _api.post(
+          ApiConstants.engagementSave,
+          body: {'episode_id': episodeId},
+          parser: (j) => j,
+        );
+      }
       return true;
     } catch (e) {
       if (kDebugMode) print('toggleSave failed: $e');

@@ -51,6 +51,44 @@ async def _hot_and_new(db: AsyncSession) -> list[Series]:
     return list(res.scalars().all())
 
 
+async def _hot(db: AsyncSession, limit: int = 20) -> list[Series]:
+    res = await db.execute(
+        select(Series)
+        .where(Series.is_published.is_(True), Series.is_hot.is_(True))
+        .order_by(desc(Series.popular_score), desc(Series.view_count), desc(Series.created_at))
+        .limit(limit)
+    )
+    items = list(res.scalars().all())
+    if items:
+        return items
+    res = await db.execute(
+        select(Series)
+        .where(Series.is_published.is_(True))
+        .order_by(desc(Series.popular_score), desc(Series.view_count))
+        .limit(limit)
+    )
+    return list(res.scalars().all())
+
+
+async def _new_releases(db: AsyncSession, limit: int = 20) -> list[Series]:
+    res = await db.execute(
+        select(Series)
+        .where(Series.is_published.is_(True), Series.is_new_release.is_(True))
+        .order_by(desc(Series.created_at))
+        .limit(limit)
+    )
+    items = list(res.scalars().all())
+    if items:
+        return items
+    res = await db.execute(
+        select(Series)
+        .where(Series.is_published.is_(True))
+        .order_by(desc(Series.created_at))
+        .limit(limit)
+    )
+    return list(res.scalars().all())
+
+
 async def _most_seen(db: AsyncSession, limit: int = 20) -> list[Series]:
     res = await db.execute(
         select(Series)
@@ -198,6 +236,8 @@ async def build_home_shelves(db: AsyncSession) -> list[dict]:
     viral = await _most_viral(db)
     vip = await _vip(db)
     exclusive = await _exclusive(db)
+    hot = await _hot(db)
+    new_releases = await _new_releases(db)
 
     genre_shelves = [
         ("romance", "Romance"),
@@ -219,11 +259,13 @@ async def build_home_shelves(db: AsyncSession) -> list[dict]:
 
     shelves: list[dict] = [
         {"key": "hot_new", "title": "Hot & New Releases", "type": "banner", "items": [_series_to_brief(s) for s in hot_new[:10]]},
+        {"key": "popular", "title": "Popular", "type": "grid", "items": [_series_to_brief(s) for s in popular]},
+        {"key": "hot", "title": "Hot", "type": "grid", "items": [_series_to_brief(s) for s in hot]},
+        {"key": "new_releases", "title": "New Releases", "type": "grid", "items": [_series_to_brief(s) for s in new_releases]},
         {"key": "trending", "title": "Top Trending", "type": "row", "items": [_series_to_brief(s) for s in trending]},
         {"key": "most_seen", "title": "Most Seen", "type": "row", "items": [_series_to_brief(s) for s in most_seen]},
         {"key": "frequent_seen", "title": "Frequent Seen", "type": "row", "items": [_series_to_brief(s) for s in frequent]},
         {"key": "most_searched", "title": "Most Searched", "type": "row", "items": [_series_to_brief(s) for s in most_searched_items]},
-        {"key": "popular", "title": "Popular", "type": "grid", "items": [_series_to_brief(s) for s in popular]},
         {"key": "most_viral", "title": "Most Viral", "type": "row", "items": [_series_to_brief(s) for s in viral]},
         {"key": "vip", "title": "VIP", "type": "row", "items": [_series_to_brief(s) for s in vip]},
         {"key": "exclusive", "title": "Exclusive", "type": "row", "items": [_series_to_brief(s) for s in exclusive]},

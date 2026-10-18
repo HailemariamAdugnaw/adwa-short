@@ -7,13 +7,10 @@ import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/poster_card.dart';
 import '../../../core/widgets/shelf_banner.dart';
-import '../../../models/category.dart';
 import '../../../models/series.dart';
-import '../../../models/shelf.dart';
 import '../providers/category_provider.dart';
 import '../providers/shelf_provider.dart';
 import '../widgets/category_tab_bar.dart';
-import '../widgets/home_shelf_section.dart';
 import '../widgets/overlay_search_bar.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -36,11 +33,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const double _heroHeight = 340.0;
-  static const double _tabBarHeight = 48.0;
+  static const double _pinnedFooterGap = 88.0;
 
   String _selectedTab = 'popular';
   final ScrollController _scrollController = ScrollController();
   double _headerOpacity = 0.0;
+  bool _shelvesApplied = false;
 
   @override
   void initState() {
@@ -73,55 +71,121 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onRefresh() async {
     final shelves = context.read<ShelfProvider>();
     final cats = context.read<CategoryProvider>();
+    final isShelfTab = _selectedTab == 'popular' ||
+        _selectedTab == 'hot' ||
+        _selectedTab == 'new';
+    if (isShelfTab) {
+      _shelvesApplied = false;
+    }
     final futures = <Future<void>>[
       shelves.load(refresh: true),
       cats.load(),
     ];
-    if (cats.isFiltering) {
-      futures.add(cats.loadFilteredSeries(refresh: true));
+    if (!isShelfTab) {
+      futures.add(cats.selectCategory(_selectedTab, refresh: true));
     }
     await Future.wait(futures);
+    if (!mounted) return;
+    if (isShelfTab) {
+      _applyShelfTab();
+    }
   }
 
-  void _onTabSelected(String id) {
+  void _applyShelfTab() {
+    final shelves = context.read<ShelfProvider>();
+    final cat = context.read<CategoryProvider>();
+    if (shelves.status != ShelfLoadStatus.success &&
+        shelves.status != ShelfLoadStatus.refreshing) {
+      return;
+    }
+    final items = _shelfItemsFor(shelves);
+    if (items == null) return;
+    cat.setShelfTab(_selectedTab, items);
+    _shelvesApplied = true;
+  }
+
+  List<Series>? _shelfItemsFor(ShelfProvider shelves) {
+    if (shelves.shelves.isEmpty) return null;
+    final key = _selectedTab == 'new' ? 'new_releases' : _selectedTab;
+    for (final s in shelves.shelves) {
+      if (s.key == key) return s.items;
+    }
+    return null;
+  }
+
+  Future<void> _onTabSelected(String id) async {
     setState(() => _selectedTab = id);
     final cat = context.read<CategoryProvider>();
     if (id == 'popular' || id == 'hot' || id == 'new') {
-      cat.select('all');
-    } else {
-      cat.select(id);
+      final shelves = context.read<ShelfProvider>();
+      final items = _shelfItemsFor(shelves);
+      if (items != null) {
+        cat.setShelfTab(id, items);
+      } else {
+        await shelves.load(refresh: true);
+        if (!mounted) return;
+        final retryItems = _shelfItemsFor(shelves);
+        if (retryItems != null) {
+          cat.setShelfTab(id, retryItems);
+        }
+      }
+      return;
     }
+    await cat.selectCategory(id);
   }
 
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
     final cat = context.watch<CategoryProvider>();
+    final shelves = context.watch<ShelfProvider>();
+    if (!_shelvesApplied &&
+        (shelves.status == ShelfLoadStatus.success ||
+            shelves.status == ShelfLoadStatus.refreshing) &&
+        shelves.shelves.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _applyShelfTab();
+      });
+    }
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: AppColors.black,
       body: RefreshIndicator(
         color: AppColors.bloodRed,
         backgroundColor: AppColors.surfaceElevated,
-        edgeOffset: topInset,
+        edgeOffset: topInset + _pinnedFooterGap,
         onRefresh: _onRefresh,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(child: _hero()),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _StickyCategoryBarDelegate(
-                categories: cat.categories,
-                selectedId: _selectedTab,
-                onSelected: _onTabSelected,
-                statusBarHeight: topInset,
+        child: Stack(
+          children: [
+            CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(child: _hero()),
+                _body(cat, shelves),
+                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+              ],
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _PinnedHeader(
                 opacity: _headerOpacity,
+                searchBar: OverlaySearchBar(
+                  onTap: widget.onOpenSearch,
+                  onFilterTap: widget.onOpenSearch,
+                ),
+                categoryBar: CategoryTabBar(
+                  categories: cat.categories,
+                  selectedId: _selectedTab,
+                  onSelected: (id) {
+                    _onTabSelected(id);
+                  },
+                ),
               ),
             ),
-            _body(),
-            const SliverToBoxAdapter(child: SizedBox(height: 96)),
           ],
         ),
       ),
@@ -155,29 +219,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return SizedBox(
       height: _heroHeight,
       width: double.infinity,
-      child: Stack(
-        children: [
-          Positioned.fill(child: heroChild),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: OverlaySearchBar(
-              onTap: widget.onOpenSearch,
-              onFilterTap: widget.onOpenSearch,
-            ),
-          ),
-        ],
-      ),
+      child: heroChild,
     );
   }
 
-  Widget _body() {
-    final cat = context.watch<CategoryProvider>();
-    if (cat.isFiltering) {
-      return _filteredBody(cat);
+  Widget _body(CategoryProvider cat, ShelfProvider shelves) {
+    final isShelfTab =
+        _selectedTab == 'popular' || _selectedTab == 'hot' || _selectedTab == 'new';
+    if (isShelfTab) {
+      return _shelfTabBody(shelves);
     }
-    final shelves = context.watch<ShelfProvider>();
+    return _categoryBody(cat);
+  }
+
+  Widget _shelfTabBody(ShelfProvider shelves) {
     switch (shelves.status) {
       case ShelfLoadStatus.idle:
       case ShelfLoadStatus.loading:
@@ -191,7 +246,8 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       case ShelfLoadStatus.refreshing:
       case ShelfLoadStatus.success:
-        if (shelves.shelves.isEmpty) {
+        final items = _shelfItemsFor(shelves) ?? <Series>[];
+        if (items.isEmpty) {
           return const SliverToBoxAdapter(
             child: EmptyState(
               icon: Icons.movie_filter_outlined,
@@ -200,25 +256,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         }
-        final rowShelves = shelves.shelves
-            .where((s) =>
-                s.type != ShelfType.banner && s.key != ShelfKeys.hot)
-            .toList();
-        return SliverList.builder(
-          itemCount: rowShelves.length,
-          itemBuilder: (_, i) {
-            final shelf = rowShelves[i];
-            return HomeShelfSection(
-              shelf: shelf,
-              onItemTap: widget.onWatchSeries,
-              onWatchNow: widget.onWatchSeries,
-            );
-          },
-        );
+        return _gridBody(items);
     }
   }
 
-  Widget _filteredBody(CategoryProvider cat) {
+  Widget _categoryBody(CategoryProvider cat) {
     switch (cat.seriesStatus) {
       case CategorySeriesStatus.idle:
       case CategorySeriesStatus.loading:
@@ -241,76 +283,72 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         }
-        return SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.48,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (BuildContext context, int i) {
-                final s = cat.filteredSeries[i];
-                return PosterCard(
-                  series: s,
-                  width: double.infinity,
-                  onTap: widget.onWatchSeries != null
-                      ? () => widget.onWatchSeries!(s)
-                      : null,
-                );
-              },
-              childCount: cat.filteredSeries.length,
-            ),
-          ),
-        );
+        return _gridBody(cat.filteredSeries);
     }
   }
-}
 
-class _StickyCategoryBarDelegate extends SliverPersistentHeaderDelegate {
-  _StickyCategoryBarDelegate({
-    required this.categories,
-    required this.selectedId,
-    required this.onSelected,
-    required this.statusBarHeight,
-    required this.opacity,
-  });
-
-  final List<AdwaCategory> categories;
-  final String selectedId;
-  final ValueChanged<String> onSelected;
-  final double statusBarHeight;
-  final double opacity;
-
-  @override
-  double get minExtent => statusBarHeight + _HomeScreenState._tabBarHeight;
-
-  @override
-  double get maxExtent => statusBarHeight + _HomeScreenState._tabBarHeight;
-
-  @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Color.lerp(AppColors.transparent, AppColors.black, opacity),
-      padding: EdgeInsets.only(top: statusBarHeight),
-      alignment: Alignment.bottomCenter,
-      child: CategoryTabBar(
-        categories: categories,
-        selectedId: selectedId,
-        onSelected: onSelected,
+  Widget _gridBody(List<Series> items) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.48,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (BuildContext context, int i) {
+            final s = items[i];
+            return PosterCard(
+              series: s,
+              width: double.infinity,
+              onTap: widget.onWatchSeries != null
+                  ? () => widget.onWatchSeries!(s)
+                  : null,
+            );
+          },
+          childCount: items.length,
+        ),
       ),
     );
   }
+}
+
+class _PinnedHeader extends StatelessWidget {
+  const _PinnedHeader({
+    required this.opacity,
+    required this.searchBar,
+    required this.categoryBar,
+  });
+
+  final double opacity;
+  final Widget searchBar;
+  final Widget categoryBar;
 
   @override
-  bool shouldRebuild(_StickyCategoryBarDelegate oldDelegate) {
-    return categories != oldDelegate.categories ||
-        selectedId != oldDelegate.selectedId ||
-        onSelected != oldDelegate.onSelected ||
-        statusBarHeight != oldDelegate.statusBarHeight ||
-        opacity != oldDelegate.opacity;
+  Widget build(BuildContext context) {
+    final clamped = opacity.clamp(0.0, 1.0);
+    return Container(
+      decoration: BoxDecoration(
+        color: Color.lerp(AppColors.transparent, AppColors.black, clamped),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.divider.withValues(alpha: clamped),
+            width: 0.6,
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          searchBar,
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: categoryBar,
+          ),
+        ],
+      ),
+    );
   }
 }
