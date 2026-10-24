@@ -12,6 +12,7 @@ import '../../models/short_item.dart';
 import '../network/api_client.dart';
 import '../theme/colors.dart';
 import '../theme/text_styles.dart';
+import '../utils/formatters.dart';
 import '../utils/video_format.dart';
 
 enum VideoPlayerPresentation { embedded, fullscreen }
@@ -96,7 +97,6 @@ class UnifiedVideoPlayer extends StatefulWidget {
 
 class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   VideoPlayerController? _controller;
-  final GlobalKey _videoKey = GlobalKey();
   bool _isInitialized = false;
   bool _isPlaying = false;
   bool _hasError = false;
@@ -111,30 +111,40 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _toggleInProgress = false;
+  bool _isScrubbing = false;
+  double _scrubPositionMs = 0.0;
 
   bool get _isEmbedded =>
       widget.presentation == VideoPlayerPresentation.embedded;
 
   Duration get _effectiveDuration {
-    if (_controller != null && _controller!.value.isInitialized) {
-      final cd = _controller!.value.duration;
-      if (cd.inMilliseconds > 0) return cd;
+    final c = _controller;
+    final ctrlDur =
+        (c != null && c.value.isInitialized) ? c.value.duration : Duration.zero;
+
+    // 1. Controller has a valid duration of at least 1 second
+    if (ctrlDur >= const Duration(seconds: 1)) {
+      return ctrlDur;
     }
-    if (_duration.inMilliseconds > 0) return _duration;
-    if (widget.knownDuration.inMilliseconds > 0) return widget.knownDuration;
+    // 2. Known duration passed from metadata/API is at least 1 second
+    if (widget.knownDuration >= const Duration(seconds: 1)) {
+      return widget.knownDuration;
+    }
+    // 3. Stored state duration is at least 1 second
+    if (_duration >= const Duration(seconds: 1)) {
+      return _duration;
+    }
+
+    // 4. Fallbacks if duration is sub-second
+    if (ctrlDur > Duration.zero) return ctrlDur;
+    if (widget.knownDuration > Duration.zero) return widget.knownDuration;
+    if (_duration > Duration.zero) return _duration;
+
     return Duration.zero;
   }
 
   String formatDuration(Duration duration) {
-    if (duration <= Duration.zero) return '00:00';
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = duration.inHours;
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    if (hours > 0) {
-      return '$hours:$minutes:$seconds';
-    }
-    return '$minutes:$seconds';
+    return Formatters.playbackClock(duration);
   }
 
   @override
@@ -158,6 +168,14 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         if (!widget.isLocked && (_controller == null || _hasError)) {
           _initPlayer();
         }
+      }
+      if (widget.knownDuration >= const Duration(seconds: 1) &&
+          (_controller == null ||
+              _controller!.value.duration < const Duration(seconds: 1)) &&
+          _duration != widget.knownDuration) {
+        setState(() {
+          _duration = widget.knownDuration;
+        });
       }
     }
   }
@@ -200,6 +218,8 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         _showControls = true;
         _position = Duration.zero;
         _duration = widget.knownDuration;
+        _isScrubbing = false;
+        _scrubPositionMs = 0.0;
       });
     }
     await _disposeController();
@@ -262,12 +282,27 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       }
       c.setLooping(widget.looping);
 
+      final ctrlDuration = c.value.duration;
+      final actualDuration = ctrlDuration >= const Duration(seconds: 1)
+          ? ctrlDuration
+          : (widget.knownDuration >= const Duration(seconds: 1)
+              ? widget.knownDuration
+              : (_duration >= const Duration(seconds: 1)
+                  ? _duration
+                  : (ctrlDuration > Duration.zero
+                      ? ctrlDuration
+                      : widget.knownDuration)));
+
+      if (c.value.duration <= Duration.zero && actualDuration > Duration.zero) {
+        c.value = c.value.copyWith(duration: actualDuration);
+      }
+
       if (mounted) {
         setState(() {
           _isInitialized = true;
           _isPlaying = false;
           _position = c.value.position;
-          _duration = c.value.duration;
+          _duration = actualDuration;
         });
       }
 
@@ -305,22 +340,27 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       }
       return;
     }
+
     final effDur = _effectiveDuration;
+    if (effDur >= const Duration(seconds: 1) &&
+        c.value.duration < const Duration(seconds: 1)) {
+      c.value = c.value.copyWith(duration: effDur);
+    }
+
     if (!widget.looping &&
         c.value.isInitialized &&
-        effDur.inMilliseconds > 0 &&
+        effDur >= const Duration(seconds: 1) &&
         !c.value.isPlaying &&
-        c.value.position.inMilliseconds >=
-            effDur.inMilliseconds - 500 &&
+        _position.inMilliseconds >= effDur.inMilliseconds - 500 &&
         !_completionSent) {
       _completionSent = true;
       widget.onCompleted?.call();
     }
-    if (c.value.position.inMilliseconds <
-            effDur.inMilliseconds - 1000 &&
+    if (_position.inMilliseconds < effDur.inMilliseconds - 1000 &&
         _completionSent) {
       _completionSent = false;
     }
+
     final playingNow = c.value.isPlaying;
     final posNow = c.value.position;
     final durNow = c.value.duration;
@@ -328,16 +368,27 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
     final playingChanged = playingNow != _isPlaying;
     final posChanged = posNow.inSeconds != _position.inSeconds ||
         (posNow - _position).abs().inMilliseconds > 250;
-    final durChanged = durNow != _duration;
+    final durChanged =
+        durNow >= const Duration(seconds: 1) && durNow != _duration;
 
     if (playingChanged) {
       _isPlaying = playingNow;
       widget.onPlayingChanged?.call(playingNow);
     }
+
     if (c.value.isInitialized) {
-      _position = posNow;
-      _duration = durNow;
+      // Don't let an uninitialized zero position wipe out an advancing position,
+      // unless playback actually reset / looped back to the beginning.
+      if (posNow > Duration.zero ||
+          _position <= Duration.zero ||
+          posNow < _position - const Duration(seconds: 2)) {
+        _position = posNow;
+      }
+      if (durNow >= const Duration(seconds: 1)) {
+        _duration = durNow;
+      }
     }
+
     if (mounted && !_isDisposed && (playingChanged || posChanged || durChanged)) {
       setState(() {});
     }
@@ -351,24 +402,56 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
     try {
       final wasPlaying = c.value.isPlaying;
       if (wasPlaying) {
+        Duration? livePos;
+        try {
+          livePos = await c.position;
+        } catch (_) {}
+        final pausePos = (livePos != null && livePos > Duration.zero)
+            ? livePos
+            : (_position > Duration.zero ? _position : c.value.position);
+
         await c.pause();
         if (!mounted || _isDisposed) return;
         setState(() {
           _isPlaying = false;
+          _position = pausePos;
           _showControls = true;
         });
         _hideControlsTimer?.cancel();
       } else {
-        final currentPos = c.value.position;
-        final dur = _effectiveDuration;
-        if (dur.inMilliseconds > 0 &&
-            currentPos.inMilliseconds >= dur.inMilliseconds - 300) {
-          await c.seekTo(Duration.zero);
+        // Resuming playback
+        Duration? livePos;
+        try {
+          livePos = await c.position;
+        } catch (_) {}
+        final resumePos = (livePos != null && livePos > Duration.zero)
+            ? livePos
+            : (_position > Duration.zero ? _position : c.value.position);
+
+        // Before calling c.play(), ensure c.value.duration is non-zero so c.play()
+        // does not trigger `if (value.position == value.duration) seekTo(Duration.zero)`.
+        final effDur = _effectiveDuration;
+        if (effDur >= const Duration(seconds: 1)) {
+          c.value = c.value.copyWith(
+            duration: effDur,
+            position: resumePos,
+          );
         }
+
         await c.play();
+
+        // Guard against internal player reset to 0:
+        if (resumePos > const Duration(milliseconds: 500)) {
+          final cur = c.value.position;
+          if (cur < const Duration(milliseconds: 200)) {
+            await c.seekTo(resumePos);
+          }
+        }
+
         if (!mounted || _isDisposed) return;
         setState(() {
           _isPlaying = true;
+          _position = resumePos;
           _showControls = true;
         });
         _resetHideTimer();
@@ -394,19 +477,47 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
 
   void _startProgressTimer() {
     _progressTimer?.cancel();
-    _progressTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
       if (_isDisposed) return;
       final c = _controller;
       if (c == null || !c.value.isInitialized) return;
-      final posNow = c.value.position;
+
+      final effDur = _effectiveDuration;
+      if (effDur >= const Duration(seconds: 1) &&
+          c.value.duration < const Duration(seconds: 1)) {
+        c.value = c.value.copyWith(duration: effDur);
+      }
+
+      Duration? realPos;
+      try {
+        realPos = await c.position;
+      } catch (_) {}
+
+      if (_isDisposed || !mounted) return;
+
+      final currentLive = (realPos != null && realPos > Duration.zero)
+          ? realPos
+          : c.value.position;
+
+      // Ensure controller value position stays up-to-date with hardware playback
+      if (realPos != null && realPos > Duration.zero && realPos > c.value.position) {
+        c.value = c.value.copyWith(
+          position: realPos,
+          duration: effDur >= const Duration(seconds: 1) ? effDur : c.value.duration,
+        );
+      }
+
       final durNow = c.value.duration;
-      if (posNow.inMilliseconds != _position.inMilliseconds ||
-          durNow.inMilliseconds != _duration.inMilliseconds) {
-        _position = posNow;
+      if (durNow >= const Duration(seconds: 1)) {
         _duration = durNow;
-        if (mounted && !_isDisposed) {
-          setState(() {});
-        }
+      }
+
+      if (!_isScrubbing) {
+        _position = currentLive;
+      }
+
+      if (mounted && !_isDisposed) {
+        setState(() {});
       }
     });
   }
@@ -454,6 +565,8 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       _isPlaying = false;
       _completionSent = false;
       _showControls = true;
+      _isScrubbing = false;
+      _scrubPositionMs = 0.0;
     });
     _hideControlsTimer?.cancel();
     _stopProgressTimer();
@@ -527,7 +640,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
             child: SizedBox(
               width: vw,
               height: vh,
-              child: VideoPlayer(_controller!, key: _videoKey),
+              child: VideoPlayer(_controller!),
             ),
           ),
         ),
@@ -659,19 +772,18 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       child: ValueListenableBuilder<VideoPlayerValue>(
         valueListenable: c,
         builder: (context, value, _) {
-          final liveDur = value.duration.inMilliseconds > 0
-              ? value.duration
-              : (_duration.inMilliseconds > 0
-                  ? _duration
-                  : widget.knownDuration);
+          final totalDuration = _effectiveDuration;
+          final maxMs = totalDuration.inMilliseconds.toDouble();
+          final bool hasValidDuration =
+              totalDuration >= const Duration(seconds: 1);
+          final currentPosition = _isScrubbing
+              ? Duration(milliseconds: _scrubPositionMs.round())
+              : (_position > Duration.zero ? _position : value.position);
+          final currentMs = currentPosition.inMilliseconds.toDouble();
 
-          final maxMs = liveDur.inMilliseconds.toDouble();
-          final posMs = maxMs > 0
-              ? value.position.inMilliseconds.toDouble().clamp(0.0, maxMs)
-              : 0.0;
-
-          final sliderValue = maxMs > 0 ? posMs : 0.0;
-          final sliderMax = maxMs > 0 ? maxMs : 1.0;
+          final sliderMax = hasValidDuration ? maxMs : 1.0;
+          final sliderValue =
+              hasValidDuration ? currentMs.clamp(0.0, sliderMax) : 0.0;
 
           return Container(
             padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPadding),
@@ -680,28 +792,72 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
               children: [
                 SizedBox(
                   height: 20,
-                  child: SliderTheme(
-                    data: SliderThemeData(
-                      trackHeight: 3.0,
-                      thumbShape:
-                          const RoundSliderThumbShape(enabledThumbRadius: 6.0),
-                      overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 14.0),
-                      activeTrackColor: AppColors.bloodRed,
-                      inactiveTrackColor: Colors.white24,
-                      thumbColor: AppColors.bloodRed,
-                      overlayColor: AppColors.bloodRed.withValues(alpha: 0.2),
-                    ),
-                    child: Slider(
-                      value: sliderValue,
-                      min: 0.0,
-                      max: sliderMax,
-                      onChanged: maxMs > 0
-                          ? (val) {
-                              c.seekTo(Duration(milliseconds: val.toInt()));
-                            }
-                          : null,
-                    ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (c.value.duration >= const Duration(seconds: 1) &&
+                          !_isScrubbing)
+                        VideoProgressIndicator(
+                          c,
+                          allowScrubbing: false,
+                          colors: const VideoProgressColors(
+                            playedColor: Colors.transparent,
+                            bufferedColor: Colors.white24,
+                            backgroundColor: Colors.white12,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      SliderTheme(
+                        data: SliderThemeData(
+                          trackHeight: 3.0,
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6.0),
+                          overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 14.0),
+                          activeTrackColor: AppColors.bloodRed,
+                          inactiveTrackColor:
+                              c.value.duration >= const Duration(seconds: 1)
+                                  ? Colors.transparent
+                                  : Colors.white24,
+                          thumbColor: AppColors.bloodRed,
+                          overlayColor:
+                              AppColors.bloodRed.withValues(alpha: 0.2),
+                        ),
+                        child: Slider(
+                          value: sliderValue,
+                          min: 0.0,
+                          max: sliderMax,
+                          onChangeStart: hasValidDuration
+                              ? (val) {
+                                  setState(() {
+                                    _isScrubbing = true;
+                                    _scrubPositionMs = val;
+                                  });
+                                }
+                              : null,
+                          onChanged: hasValidDuration
+                              ? (val) {
+                                  setState(() {
+                                    _scrubPositionMs = val;
+                                  });
+                                }
+                              : null,
+                          onChangeEnd: hasValidDuration
+                              ? (val) async {
+                                  final seekTarget =
+                                      Duration(milliseconds: val.round());
+                                  await c.seekTo(seekTarget);
+                                  if (mounted && !_isDisposed) {
+                                    setState(() {
+                                      _isScrubbing = false;
+                                      _position = seekTarget;
+                                    });
+                                  }
+                                }
+                              : null,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -709,7 +865,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      formatDuration(value.position),
+                      formatDuration(currentPosition),
                       style: AppTextStyles.caption.copyWith(
                         color: AppColors.white,
                         fontSize: 11,
@@ -717,7 +873,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
                       ),
                     ),
                     Text(
-                      formatDuration(liveDur),
+                      formatDuration(totalDuration),
                       style: AppTextStyles.caption.copyWith(
                         color: AppColors.white,
                         fontSize: 11,
