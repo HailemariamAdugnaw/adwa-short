@@ -61,7 +61,27 @@ async def test_admin_user_management(client, admin_headers, demo_user):
     u, _ = demo_user
     res = await client.get("/admin/users", headers=admin_headers)
     assert res.status_code == 200
-    assert any(usr["id"] == u.id for usr in res.json())
+    matched = [usr for usr in res.json() if usr["id"] == u.id]
+    assert len(matched) == 1
+    assert "balance_birr" in matched[0]
+    assert "balance_coins" in matched[0]
+
+    # Test wallet endpoint
+    w_res = await client.get(f"/admin/users/{u.id}/wallet", headers=admin_headers)
+    assert w_res.status_code == 200
+    w_data = w_res.json()
+    assert "balance_birr" in w_data
+    assert "balance_coins" in w_data
+    assert "transactions" in w_data
+    assert isinstance(w_data["transactions"], list)
+
+    # Test user detail with subscriptions and passes
+    u_res = await client.get(f"/admin/users/{u.id}", headers=admin_headers)
+    assert u_res.status_code == 200
+    u_data = u_res.json()
+    assert "subscriptions" in u_data
+    assert "passes" in u_data
+    assert "watch_history" in u_data
 
     ban = await client.post(f"/admin/users/{u.id}/ban", headers=admin_headers)
     assert ban.status_code == 200
@@ -69,6 +89,16 @@ async def test_admin_user_management(client, admin_headers, demo_user):
 
     unban = await client.post(f"/admin/users/{u.id}/unban", headers=admin_headers)
     assert unban.json()["is_banned"] is False
+
+
+async def test_admin_revenue_by_content(client, admin_headers):
+    res = await client.get("/admin/revenue/by-content", headers=admin_headers)
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+    res_filtered = await client.get("/admin/revenue/by-content?series_id=99999", headers=admin_headers)
+    assert res_filtered.status_code == 200
+    assert res_filtered.json() == []
 
 
 async def test_analytics_overview(client, admin_headers):

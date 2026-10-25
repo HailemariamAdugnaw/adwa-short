@@ -35,15 +35,21 @@ const SOURCE_TYPES = [
   { value: 'deposit', label: 'Deposit' },
 ]
 
-function downloadCsv(rows) {
+function downloadCsv(rows, creatorsMap = {}) {
   if (!rows.length) return
   const headers = ['Date', 'Creator', 'Source', 'Gross', 'Creator Share', 'Platform', 'Reference']
   const lines = [headers.join(',')]
   rows.forEach((r) => {
+    const creatorLabel =
+      r.creator_display_name ||
+      r.creator_name ||
+      creatorsMap[r.creator_id]?.display_name ||
+      creatorsMap[r.creator_id]?.name ||
+      (r.creator_id ? `Creator #${r.creator_id}` : 'Platform')
     lines.push(
       [
         r.created_at ?? '',
-        `"${(r.creator_id ?? '').toString().replace(/"/g, '""')}"`,
+        `"${creatorLabel.toString().replace(/"/g, '""')}"`,
         r.source_type ?? '',
         r.gross_amount_birr ?? 0,
         r.creator_share_birr ?? 0,
@@ -74,6 +80,7 @@ export function Transactions() {
   const [page, setPage] = useState(1)
 
   const { data: creators } = useCreators()
+  const creatorsMap = Object.fromEntries((creators ?? []).map((c) => [c.id, c]))
   const { data, isLoading, isFetching, isError } = useRevenueTransactions({
     q: debouncedQ || undefined,
     creator_id: creatorId || undefined,
@@ -113,7 +120,7 @@ export function Transactions() {
           <Button
             variant="secondary"
             leftIcon={<Download className="h-4 w-4" />}
-            onClick={() => downloadCsv(items)}
+            onClick={() => downloadCsv(items, creatorsMap)}
             disabled={!items.length}
           >
             Export CSV
@@ -223,8 +230,12 @@ export function Transactions() {
                   <TD className="text-xs text-text-secondary">
                     {formatDateTime(t.created_at)}
                   </TD>
-                  <TD className="text-xs text-text-secondary">
-                    {t.creator_id ? `Creator #${t.creator_id}` : '—'}
+                  <TD className="text-xs font-medium text-text-primary">
+                    {t.creator_display_name ||
+                      t.creator_name ||
+                      creatorsMap[t.creator_id]?.display_name ||
+                      creatorsMap[t.creator_id]?.name ||
+                      (t.creator_id ? `Creator #${t.creator_id}` : 'Platform')}
                   </TD>
                   <TD>
                     <Badge tone="neutral" className="capitalize">

@@ -43,6 +43,20 @@ async def _has_ad_unlock(db: AsyncSession, user_id: int, episode_id: int) -> boo
     return res.scalar_one_or_none() is not None
 
 
+async def _has_coin_unlock(db: AsyncSession, user_id: int, episode_id: int) -> bool:
+    from app.models.wallet import WalletTransaction
+    res = await db.execute(
+        select(WalletTransaction)
+        .join(Wallet, Wallet.id == WalletTransaction.wallet_id)
+        .where(
+            Wallet.user_id == user_id,
+            WalletTransaction.type == "purchase",
+            WalletTransaction.reference == f"episode:{episode_id}",
+        )
+    )
+    return res.scalar_one_or_none() is not None
+
+
 async def _has_active_pass(db: AsyncSession, user_id: int) -> Tuple[bool, Optional[datetime]]:
     now = datetime.now(timezone.utc)
     res = await db.execute(
@@ -101,6 +115,9 @@ async def resolve_access(
     has_sub, _ = await _has_active_subscription(db, user.id)
     if has_sub:
         return AccessResult.ALLOWED_SUBSCRIPTION
+
+    if await _has_coin_unlock(db, user.id, episode.id):
+        return AccessResult.ALLOWED_COINS
 
     if episode.coin_cost > 0:
         wres = await db.execute(select(Wallet).where(Wallet.user_id == user.id))

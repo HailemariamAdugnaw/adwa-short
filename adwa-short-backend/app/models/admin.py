@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -29,6 +29,16 @@ class ManualCashDeposit(Base):
     coins_credited: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], lazy="selectin")
+
+    @property
+    def user_display_name(self) -> Optional[str]:
+        return self.user.display_name if self.user else None
+
+    @property
+    def user_phone(self) -> Optional[str]:
+        return self.user.phone if self.user else None
 
 
 class AuditLog(Base):

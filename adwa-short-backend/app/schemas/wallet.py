@@ -76,3 +76,5 @@ class ManualDepositOut(BaseModel):
     coins_credited: int
     notes: Optional[str]
     created_at: datetime
+    user_display_name: Optional[str] = None
+    user_phone: Optional[str] = None

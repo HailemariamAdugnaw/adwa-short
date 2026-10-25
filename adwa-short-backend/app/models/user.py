@@ -27,6 +27,14 @@ class User(Base):
     wallet: Mapped[Optional["Wallet"]] = relationship(back_populates="user", uselist=False, lazy="selectin")
     devices: Mapped[List["Device"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
+    @property
+    def balance_birr(self) -> float:
+        return float(self.wallet.balance_birr) if self.wallet else 0.0
+
+    @property
+    def balance_coins(self) -> int:
+        return int(self.wallet.balance_coins) if self.wallet else 0
+
     def __repr__(self) -> str:
         return f"<User id={self.id} phone={self.phone} role={self.role}>"
 

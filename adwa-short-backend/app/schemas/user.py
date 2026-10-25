@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserOut(BaseModel):
@@ -18,6 +18,8 @@ class UserOut(BaseModel):
     is_active: bool
     is_banned: bool = False
     created_at: datetime
+    balance_birr: float = 0.0
+    balance_coins: int = 0
 
 
 class UserUpdate(BaseModel):
@@ -43,9 +45,19 @@ class WalletTxOut(BaseModel):
     type: str
     amount_birr: float
     amount_coins: int
-    description: Optional[str]
-    reference: Optional[str]
+    description: Optional[str] = None
+    reference: Optional[str] = None
     created_at: datetime
+
+
+class WalletDetailOut(WalletOut):
+    transactions: List[WalletTxOut] = Field(default_factory=list)
+
+
+class UserDetailOut(UserOut):
+    subscriptions: List[Dict[str, Any]] = Field(default_factory=list)
+    passes: List[Dict[str, Any]] = Field(default_factory=list)
+    watch_history: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class DeviceOut(BaseModel):

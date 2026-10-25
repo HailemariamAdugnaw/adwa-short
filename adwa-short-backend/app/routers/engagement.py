@@ -121,7 +121,58 @@ async def log_view(
         subscription_id=subscription.id if subscription else None,
     )
     db.add(v)
-    ep.view_count = (ep.view_count or 0) + 1
+
+    # 1. Valid View Qualification: View is officially qualified and performance view_count incremented
+    # ONLY if watch_time_seconds >= 60 (1 minute threshold)
+    if payload.watch_time_seconds >= 60:
+        ep.view_count = (ep.view_count or 0) + 1
+        if ep.series_id:
+            sres = await db.execute(select(Series).where(Series.id == ep.series_id))
+            series = sres.scalar_one_or_none()
+            if series:
+                series.view_count = (series.view_count or 0) + 1
+
+        # 2. Coin Payment: If unlocked with coins and valid 1-minute threshold is met,
+        # convert coin value to Birr, multiply by agreed creator split %, and credit immediately.
+        from app.models.wallet import Wallet, WalletTransaction
+        from app.models.revenue import RevenueTransaction
+        from app.services.revenue import RevenueService
+        from app.deps import get_settings_dict
+
+        wtx_res = await db.execute(
+            select(WalletTransaction)
+            .join(Wallet, Wallet.id == WalletTransaction.wallet_id)
+            .where(
+                Wallet.user_id == user.id,
+                WalletTransaction.type == "purchase",
+                WalletTransaction.reference == f"episode:{ep.id}",
+            )
+        )
+        coin_tx = wtx_res.scalar_one_or_none()
+        if coin_tx is not None:
+            rev_tx_res = await db.execute(
+                select(RevenueTransaction).where(
+                    RevenueTransaction.source_type == "coin_payment",
+                    RevenueTransaction.episode_id == ep.id,
+                    RevenueTransaction.user_id == user.id,
+                )
+            )
+            if rev_tx_res.scalar_one_or_none() is None:
+                coins_spent = abs(int(coin_tx.amount_coins)) if coin_tx.amount_coins else ep.coin_cost
+                if coins_spent > 0:
+                    sd = await get_settings_dict(db)
+                    try:
+                        coin_price = float(sd.get("coin_price_birr", "1.0"))
+                    except (ValueError, TypeError):
+                        coin_price = 1.0
+                    rev_svc = RevenueService(db)
+                    await rev_svc.calculate_coin_revenue(
+                        episode_id=ep.id,
+                        user_id=user.id,
+                        coins_spent=coins_spent,
+                        coin_price_birr=coin_price,
+                    )
+
     await db.commit()
     await db.refresh(v)
     return v

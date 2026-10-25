@@ -17,18 +17,19 @@ import {
   SkeletonRow,
   EmptyRow,
 } from '../../components/ui/Table'
-import { BarChartCard } from '../../components/charts/BarChartCard'
 import { formatBirr, truncate } from '../../lib/format'
 
 function downloadCsv(rows) {
   if (!rows.length) return
-  const headers = ['Title', 'Type', 'Gross', 'Creator Share', 'Platform Share']
+  const headers = ['Title', 'Series', 'Creator', 'Type', 'Gross', 'Creator Share', 'Platform Share']
   const lines = [headers.join(',')]
   rows.forEach((r) => {
     lines.push(
       [
         `"${(r.title ?? '').replace(/"/g, '""')}"`,
-        r.episode_id ? 'episode' : 'series',
+        `"${(r.series_title ?? '').replace(/"/g, '""')}"`,
+        `"${(r.creator_name ?? '').replace(/"/g, '""')}"`,
+        r.content_type || (r.episode_id ? 'episode' : 'series'),
         r.gross_birr ?? 0,
         r.creator_share_birr ?? 0,
         r.platform_share_birr ?? 0,
@@ -52,9 +53,13 @@ export function RevenueByContent() {
   const [creatorFilter, setCreatorFilter] = useState('')
   const [seriesFilter, setSeriesFilter] = useState('')
 
-  const { data, isLoading, isError } = useRevenueByContent()
+  const { data, isLoading, isError } = useRevenueByContent({
+    creator_id: creatorFilter || undefined,
+    series_id: seriesFilter || undefined,
+  })
   const { data: creators } = useCreators()
-  const { data: seriesList } = useSeriesList({ page: 1 })
+  const { data: rawSeries } = useSeriesList({ page: 1 })
+  const seriesList = Array.isArray(rawSeries) ? rawSeries : (rawSeries?.items ?? [])
 
   let items = Array.isArray(data) ? data : []
   if (creatorFilter) {
@@ -66,10 +71,7 @@ export function RevenueByContent() {
     items = items.filter((c) => c.series_id === sid)
   }
 
-  const top = items.slice(0, 10).map((c) => ({
-    name: truncate(c.title ?? '—', 22),
-    revenue: Number(c.gross_birr ?? 0),
-  }))
+  const hasFilter = !!(creatorFilter || seriesFilter)
 
   return (
     <div className="space-y-4">
@@ -80,14 +82,28 @@ export function RevenueByContent() {
             Per-series / per-episode revenue · {items.length} items
           </p>
         </div>
-        <Button
-          variant="secondary"
-          leftIcon={<Download className="h-4 w-4" />}
-          onClick={() => downloadCsv(items)}
-          disabled={!items.length}
-        >
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          {hasFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setCreatorFilter('')
+                setSeriesFilter('')
+              }}
+            >
+              Reset Filters
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            leftIcon={<Download className="h-4 w-4" />}
+            onClick={() => downloadCsv(items)}
+            disabled={!items.length}
+          >
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card padding="md">
@@ -100,7 +116,7 @@ export function RevenueByContent() {
             <option value="">All creators</option>
             {(creators ?? []).map((c) => (
               <option key={c.id} value={c.id} className="bg-surface">
-                {c.name}
+                {c.display_name || c.name}
               </option>
             ))}
           </Select>
@@ -110,7 +126,7 @@ export function RevenueByContent() {
             onChange={(e) => setSeriesFilter(e.target.value)}
           >
             <option value="">All series</option>
-            {(seriesList ?? []).map((s) => (
+            {seriesList.map((s) => (
               <option key={s.id} value={s.id} className="bg-surface">
                 {s.title}
               </option>
@@ -119,21 +135,12 @@ export function RevenueByContent() {
         </div>
       </Card>
 
-      <BarChartCard
-        title="Top Content by Revenue"
-        data={top}
-        xKey="name"
-        bars={[{ key: 'revenue', label: 'Total Revenue', color: '#C8102E' }]}
-        valueFormatter={(v) => formatBirr(v, { compact: true })}
-        loading={isLoading}
-        height={280}
-      />
-
       <Card padding="none" className="overflow-hidden">
         <Table>
           <THead>
             <TR>
-              <TH>Title</TH>
+              <TH>Content</TH>
+              <TH>Creator</TH>
               <TH>Type</TH>
               <TH className="text-right">Gross</TH>
               <TH className="text-right">Creator Share</TH>
@@ -142,9 +149,9 @@ export function RevenueByContent() {
           </THead>
           <TBody>
             {isLoading ? (
-              <SkeletonRow colSpan={5} rows={6} />
+              <SkeletonRow colSpan={6} rows={6} />
             ) : isError ? (
-              <EmptyRow colSpan={5}>
+              <EmptyRow colSpan={6}>
                 <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
                   <AlertCircle className="h-6 w-6 text-danger" />
                   <p className="text-sm text-text-secondary">Could not load content revenue.</p>
@@ -159,7 +166,7 @@ export function RevenueByContent() {
                 </div>
               </EmptyRow>
             ) : items.length === 0 ? (
-              <EmptyRow colSpan={5}>
+              <EmptyRow colSpan={6}>
                 <EmptyState
                   icon={Film}
                   title="No content revenue"
@@ -175,10 +182,18 @@ export function RevenueByContent() {
                     c.series_id && navigate(`/content/series/${c.series_id}/edit`)
                   }
                 >
-                  <TD className="font-medium">{c.title ?? '—'}</TD>
+                  <TD>
+                    <div className="font-medium text-text-primary">{c.title ?? '—'}</div>
+                    {c.series_title && c.episode_id && (
+                      <div className="text-xs text-text-muted">{c.series_title}</div>
+                    )}
+                  </TD>
+                  <TD className="text-xs text-text-secondary">
+                    {c.creator_name || (c.creator_id ? `Creator #${c.creator_id}` : 'Platform')}
+                  </TD>
                   <TD>
                     <span className="text-[10px] uppercase tracking-wider text-text-muted">
-                      {c.episode_id ? 'episode' : 'series'}
+                      {c.content_type || (c.episode_id ? 'episode' : 'series')}
                     </span>
                   </TD>
                   <TD className="text-right tabular-nums font-medium">

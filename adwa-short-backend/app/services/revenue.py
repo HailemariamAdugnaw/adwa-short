@@ -66,9 +66,9 @@ async def _resolve_split_pct(
     if rule is not None:
         return float(rule.creator_share_pct)
 
-    if creator is not None:
-        return float(creator.default_revenue_split_pct or 0)
-    return 0.0
+    if creator is not None and creator.default_revenue_split_pct is not None:
+        return float(creator.default_revenue_split_pct)
+    return 50.0
 
 
 class RevenueService:
@@ -80,7 +80,7 @@ class RevenueService:
         episode_id: int,
         user_id: int,
         coins_spent: int,
-        coin_price_birr: float,
+        coin_price_birr: float = 1.0,
         reference: Optional[str] = None,
     ) -> RevenueTransaction:
         ep_res = await self.db.execute(select(Episode).where(Episode.id == episode_id))
@@ -114,6 +114,7 @@ class RevenueService:
         self,
         episode_id: int,
         user_id: int,
+        gross_amount_birr: float = 0.0,
         reference: Optional[str] = None,
     ) -> RevenueTransaction:
         ep_res = await self.db.execute(select(Episode).where(Episode.id == episode_id))
@@ -127,9 +128,9 @@ class RevenueService:
             episode_id=episode.id,
             user_id=user_id,
             source_type="ad_revenue",
-            gross_amount_birr=0,
-            creator_share_birr=0,
-            platform_share_birr=0,
+            gross_amount_birr=gross_amount_birr,
+            creator_share_birr=0.0,
+            platform_share_birr=gross_amount_birr,
             reference=reference or f"ad:episode:{episode.id}:user:{user_id}",
         )
         self.db.add(tx)
@@ -155,58 +156,89 @@ class RevenueService:
 
         price_birr = float(time_pass.price_birr or 0)
 
+        duration_seconds = 0
+        if purchase.expires_at and purchase.starts_at:
+            duration_seconds = int((purchase.expires_at - purchase.starts_at).total_seconds())
+        if duration_seconds <= 0:
+            duration_seconds = int(time_pass.duration_hours or 1) * 3600
+        duration_seconds = max(duration_seconds, 1)
+
+        rate_per_second = price_birr / float(duration_seconds)
+
         views_res = await self.db.execute(
             select(ViewLog).where(
                 ViewLog.user_id == user_id,
                 ViewLog.pass_purchase_id == pass_purchase_id,
+                ViewLog.watch_time_seconds >= 60,
             )
         )
         views = views_res.scalars().all()
-        if not views:
-            return []
 
         per_episode: dict[int, int] = {}
         for v in views:
             per_episode[v.episode_id] = per_episode.get(v.episode_id, 0) + int(v.watch_time_seconds or 0)
 
-        total_watch = sum(per_episode.values())
-        if total_watch <= 0:
-            return []
-
-        consumed_value = price_birr
-
         episode_ids = list(per_episode.keys())
-        eps_res = await self.db.execute(select(Episode).where(Episode.id.in_(episode_ids)))
-        episodes = {e.id: e for e in eps_res.scalars().all()}
+        episodes = {}
+        if episode_ids:
+            eps_res = await self.db.execute(select(Episode).where(Episode.id.in_(episode_ids)))
+            episodes = {e.id: e for e in eps_res.scalars().all()}
 
-        per_creator_share: dict[int, float] = {}
-        for ep_id, watch in per_episode.items():
+        total_attributed_gross = 0.0
+        txs: List[RevenueTransaction] = []
+
+        raw_gross_by_ep = {
+            ep_id: watch_secs * rate_per_second
+            for ep_id, watch_secs in per_episode.items()
+        }
+        sum_raw_gross = sum(raw_gross_by_ep.values())
+        scale = 1.0
+        if sum_raw_gross > price_birr and sum_raw_gross > 0:
+            scale = price_birr / sum_raw_gross
+
+        for ep_id, raw_gross in raw_gross_by_ep.items():
             ep = episodes.get(ep_id)
             if ep is None:
                 continue
             creator = await _resolve_creator(self.db, ep)
-            if creator is None:
-                continue
             split_pct = await _resolve_split_pct(self.db, creator, ep, ep.series_id)
-            share_of_watch = watch / total_watch
-            share_value = consumed_value * share_of_watch * (split_pct / 100.0)
-            per_creator_share[creator.id] = per_creator_share.get(creator.id, 0.0) + share_value
 
-        txs: List[RevenueTransaction] = []
-        for creator_id, creator_share in per_creator_share.items():
+            gross_ep = round(raw_gross * scale, 4)
+            creator_share = round(gross_ep * (split_pct / 100.0), 4)
+            platform_share = round(gross_ep - creator_share, 4)
+            total_attributed_gross += gross_ep
+
             tx = RevenueTransaction(
-                creator_id=creator_id,
-                series_id=None,
-                episode_id=None,
+                creator_id=creator.id if creator else None,
+                series_id=ep.series_id,
+                episode_id=ep.id,
                 user_id=user_id,
                 source_type="pass_consumption",
-                gross_amount_birr=consumed_value,
+                gross_amount_birr=gross_ep,
                 creator_share_birr=creator_share,
-                platform_share_birr=consumed_value - creator_share,
-                reference=f"pass:{pass_purchase_id}:user:{user_id}",
+                platform_share_birr=platform_share,
+                reference=f"pass:{pass_purchase_id}:ep:{ep.id}:user:{user_id}",
             )
             self.db.add(tx)
             txs.append(tx)
+
+        unconsumed_gross = round(max(price_birr - total_attributed_gross, 0.0), 4)
+        if unconsumed_gross > 0 or not txs:
+            unconsumed_amount = unconsumed_gross if txs else price_birr
+            un_tx = RevenueTransaction(
+                creator_id=None,
+                series_id=None,
+                episode_id=None,
+                user_id=user_id,
+                source_type="unconsumed_pass",
+                gross_amount_birr=unconsumed_amount,
+                creator_share_birr=0.0,
+                platform_share_birr=unconsumed_amount,
+                reference=f"pass:{pass_purchase_id}:unconsumed:user:{user_id}",
+            )
+            self.db.add(un_tx)
+            txs.append(un_tx)
+
         if txs:
             await self.db.flush()
         return txs
@@ -226,55 +258,89 @@ class RevenueService:
             return []
         price_birr = float(plan.price_birr or 0)
 
+        duration_seconds = 0
+        if sub.next_billing_at and sub.started_at:
+            duration_seconds = int((sub.next_billing_at - sub.started_at).total_seconds())
+        if duration_seconds <= 0:
+            duration_seconds = 30 * 86400
+        duration_seconds = max(duration_seconds, 1)
+
+        rate_per_second = price_birr / float(duration_seconds)
+
         views_res = await self.db.execute(
             select(ViewLog).where(
                 ViewLog.user_id == user_id,
                 ViewLog.subscription_id == subscription_id,
+                ViewLog.watch_time_seconds >= 60,
             )
         )
         views = views_res.scalars().all()
-        if not views:
-            return []
 
         per_episode: dict[int, int] = {}
         for v in views:
             per_episode[v.episode_id] = per_episode.get(v.episode_id, 0) + int(v.watch_time_seconds or 0)
-        total_watch = sum(per_episode.values())
-        if total_watch <= 0:
-            return []
 
         episode_ids = list(per_episode.keys())
-        eps_res = await self.db.execute(select(Episode).where(Episode.id.in_(episode_ids)))
-        episodes = {e.id: e for e in eps_res.scalars().all()}
+        episodes = {}
+        if episode_ids:
+            eps_res = await self.db.execute(select(Episode).where(Episode.id.in_(episode_ids)))
+            episodes = {e.id: e for e in eps_res.scalars().all()}
 
-        per_creator_share: dict[int, float] = {}
-        for ep_id, watch in per_episode.items():
+        total_attributed_gross = 0.0
+        txs: List[RevenueTransaction] = []
+
+        raw_gross_by_ep = {
+            ep_id: watch_secs * rate_per_second
+            for ep_id, watch_secs in per_episode.items()
+        }
+        sum_raw_gross = sum(raw_gross_by_ep.values())
+        scale = 1.0
+        if sum_raw_gross > price_birr and sum_raw_gross > 0:
+            scale = price_birr / sum_raw_gross
+
+        for ep_id, raw_gross in raw_gross_by_ep.items():
             ep = episodes.get(ep_id)
             if ep is None:
                 continue
             creator = await _resolve_creator(self.db, ep)
-            if creator is None:
-                continue
             split_pct = await _resolve_split_pct(self.db, creator, ep, ep.series_id)
-            share_of_watch = watch / total_watch
-            share_value = price_birr * share_of_watch * (split_pct / 100.0)
-            per_creator_share[creator.id] = per_creator_share.get(creator.id, 0.0) + share_value
 
-        txs: List[RevenueTransaction] = []
-        for creator_id, creator_share in per_creator_share.items():
+            gross_ep = round(raw_gross * scale, 4)
+            creator_share = round(gross_ep * (split_pct / 100.0), 4)
+            platform_share = round(gross_ep - creator_share, 4)
+            total_attributed_gross += gross_ep
+
             tx = RevenueTransaction(
-                creator_id=creator_id,
-                series_id=None,
-                episode_id=None,
+                creator_id=creator.id if creator else None,
+                series_id=ep.series_id,
+                episode_id=ep.id,
                 user_id=user_id,
                 source_type="subscription_consumption",
-                gross_amount_birr=price_birr,
+                gross_amount_birr=gross_ep,
                 creator_share_birr=creator_share,
-                platform_share_birr=price_birr - creator_share,
-                reference=f"subscription:{subscription_id}:user:{user_id}",
+                platform_share_birr=platform_share,
+                reference=f"subscription:{subscription_id}:ep:{ep.id}:user:{user_id}",
             )
             self.db.add(tx)
             txs.append(tx)
+
+        unconsumed_gross = round(max(price_birr - total_attributed_gross, 0.0), 4)
+        if unconsumed_gross > 0 or not txs:
+            unconsumed_amount = unconsumed_gross if txs else price_birr
+            un_tx = RevenueTransaction(
+                creator_id=None,
+                series_id=None,
+                episode_id=None,
+                user_id=user_id,
+                source_type="unconsumed_subscription",
+                gross_amount_birr=unconsumed_amount,
+                creator_share_birr=0.0,
+                platform_share_birr=unconsumed_amount,
+                reference=f"subscription:{subscription_id}:unconsumed:user:{user_id}",
+            )
+            self.db.add(un_tx)
+            txs.append(un_tx)
+
         if txs:
             await self.db.flush()
         return txs

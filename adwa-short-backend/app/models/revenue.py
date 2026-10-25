@@ -75,7 +75,17 @@ class RevenueTransaction(Base):
     payout_id: Mapped[Optional[int]] = mapped_column(ForeignKey("payouts.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
-    creator: Mapped[Optional["Creator"]] = relationship(back_populates="transactions")
+    creator: Mapped[Optional["Creator"]] = relationship(back_populates="transactions", lazy="selectin")
+
+    @property
+    def creator_display_name(self) -> Optional[str]:
+        if self.creator:
+            return self.creator.display_name or self.creator.name
+        return None
+
+    @property
+    def creator_name(self) -> Optional[str]:
+        return self.creator.name if self.creator else None
 
 
 class Payout(Base):

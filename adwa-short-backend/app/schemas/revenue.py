@@ -87,6 +87,8 @@ class RevenueTransactionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     creator_id: Optional[int]
+    creator_display_name: Optional[str] = None
+    creator_name: Optional[str] = None
     series_id: Optional[int]
     episode_id: Optional[int]
     user_id: Optional[int]
@@ -128,12 +130,23 @@ class CreatorRevenueSummary(BaseModel):
 
 
 class CreatorContentItem(BaseModel):
-    series_id: Optional[int]
-    episode_id: Optional[int]
+    series_id: Optional[int] = None
+    episode_id: Optional[int] = None
     title: str
+    series_title: Optional[str] = None
+    episode_number: Optional[int] = None
     is_series: bool
-    view_count: int
     episodes_count: int = 0
+    total_views: int = 0
+    coin_views: int = 0
+    pass_views: int = 0
+    subscription_views: int = 0
+    ad_views: int = 0
+    view_count: int = 0
+    revenue_coins_birr: float = 0.0
+    revenue_pass_birr: float = 0.0
+    revenue_sub_birr: float = 0.0
+    total_revenue_birr: float = 0.0
 
 
 class RevenueOverview(BaseModel):
@@ -155,12 +168,16 @@ class RevenueByCreatorRow(BaseModel):
 
 
 class RevenueByContentRow(BaseModel):
-    series_id: Optional[int]
-    episode_id: Optional[int]
+    series_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    creator_id: Optional[int] = None
+    creator_name: Optional[str] = None
+    series_title: Optional[str] = None
     title: str
-    gross_birr: float
-    creator_share_birr: float
-    platform_share_birr: float
+    content_type: str = "series"
+    gross_birr: float = 0.0
+    creator_share_birr: float = 0.0
+    platform_share_birr: float = 0.0
 
 
 class RevenueByMethodRow(BaseModel):

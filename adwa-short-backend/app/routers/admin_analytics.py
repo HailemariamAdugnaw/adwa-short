@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc
 
 from app.database import get_db
 from app.deps import get_current_admin
+from app.models.ad_unlock import AdUnlockLog
 from app.models.admin import ManualCashDeposit
 from app.models.content import Episode, Series
 from app.models.engagement import Comment, Like, ViewLog
@@ -22,11 +26,53 @@ from app.schemas.admin import (
     AnalyticsRetention,
     AnalyticsRevenue,
     ContentRow,
+    EpisodeContentRow,
     RetentionRow,
     RevenueRow,
 )
 
 router = APIRouter(prefix="/admin/analytics", tags=["admin-analytics"])
+
+
+async def _categorize_views(
+    db: AsyncSession,
+    views: list[ViewLog],
+    episodes_map: dict[int, Episode],
+    series_free_counts: dict[int, int],
+) -> tuple[int, int, int, int, int]:
+    coin_views = 0
+    pass_views = 0
+    sub_views = 0
+    ad_views = 0
+    free_views = 0
+
+    user_ep_pairs = {(v.user_id, v.episode_id) for v in views if v.user_id is not None}
+    ad_unlocked_set = set()
+    if user_ep_pairs:
+        ad_res = await db.execute(
+            select(AdUnlockLog.user_id, AdUnlockLog.episode_id).where(
+                AdUnlockLog.episode_id.in_([ep_id for _, ep_id in user_ep_pairs])
+            )
+        )
+        for uid, eid in ad_res.all():
+            ad_unlocked_set.add((uid, eid))
+
+    for v in views:
+        if v.subscription_id is not None:
+            sub_views += 1
+        elif v.pass_purchase_id is not None:
+            pass_views += 1
+        else:
+            ep = episodes_map.get(v.episode_id)
+            free_limit = series_free_counts.get(v.series_id or (ep.series_id if ep else 0), 0)
+            if ep and ep.episode_number <= free_limit:
+                free_views += 1
+            elif (v.user_id, v.episode_id) in ad_unlocked_set:
+                ad_views += 1
+            else:
+                coin_views += 1
+
+    return coin_views, pass_views, sub_views, ad_views, free_views
 
 
 @router.get("/overview", response_model=AnalyticsOverview)
@@ -39,7 +85,7 @@ async def overview(db: AsyncSession = Depends(get_db), _: User = Depends(get_cur
     now = datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
     total_views_24h = int(
-        (await db.execute(select(func.count(ViewLog.id)).where(ViewLog.created_at >= yesterday))).scalar_one()
+        (await db.execute(select(func.count(ViewLog.id)).where(ViewLog.created_at >= yesterday, ViewLog.watch_time_seconds >= 60))).scalar_one()
     )
     total_likes = int((await db.execute(select(func.count(Like.id)))).scalar_one())
     total_comments = int((await db.execute(select(func.count(Comment.id)))).scalar_one())
@@ -99,40 +145,131 @@ async def content_performance(
 ):
     rows = []
     res = await db.execute(select(Series).order_by(Series.popular_score.desc()).limit(limit))
-    for s in res.scalars().all():
-        ep_res = await db.execute(select(Episode.id).where(Episode.series_id == s.id))
-        ep_ids = [r[0] for r in ep_res.all()]
+    series_list = res.scalars().all()
+    series_free_map = {s.id: s.free_episode_count for s in series_list}
+
+    for s in series_list:
+        ep_res = await db.execute(select(Episode).where(Episode.series_id == s.id))
+        eps = ep_res.scalars().all()
+        ep_ids = [e.id for e in eps]
+        episodes_map = {e.id: e for e in eps}
         if ep_ids:
-            views = int((await db.execute(select(func.count(ViewLog.id)).where(ViewLog.episode_id.in_(ep_ids)))).scalar_one())
+            raw_views = int(
+                (await db.execute(select(func.count(ViewLog.id)).where(ViewLog.episode_id.in_(ep_ids)))).scalar_one()
+            )
+            q_logs_res = await db.execute(
+                select(ViewLog).where(
+                    ViewLog.episode_id.in_(ep_ids),
+                    ViewLog.watch_time_seconds >= 60,
+                )
+            )
+            q_logs = q_logs_res.scalars().all()
+            qualified_views = len(q_logs)
+
             likes = int((await db.execute(select(func.count(Like.id)).where(Like.episode_id.in_(ep_ids)))).scalar_one())
             comments = int((await db.execute(select(func.count(Comment.id)).where(Comment.episode_id.in_(ep_ids)))).scalar_one())
-            watch_secs_res = await db.execute(
-                select(func.coalesce(func.sum(ViewLog.watch_time_seconds), 0)).where(ViewLog.episode_id.in_(ep_ids))
+
+            total_watch_seconds = sum(v.watch_time_seconds for v in q_logs)
+            watch_hours = round(total_watch_seconds / 3600.0, 2) if total_watch_seconds else 0.0
+
+            completed_count = sum(1 for v in q_logs if v.completed)
+            completion_rate = round((completed_count / qualified_views) * 100.0, 1) if qualified_views else 0.0
+
+            coin_v, pass_v, sub_v, ad_v, free_v = await _categorize_views(
+                db, q_logs, episodes_map, series_free_map
             )
-            watch_secs = float(watch_secs_res.scalar_one() or 0)
-            completed_res = await db.execute(
-                select(func.count(ViewLog.id)).where(ViewLog.episode_id.in_(ep_ids), ViewLog.completed.is_(True))
-            )
-            completed = int(completed_res.scalar_one() or 0)
         else:
-            views = likes = comments = 0
-            watch_secs = 0.0
-            completed = 0
-        watch_hours = round(watch_secs / 3600.0, 2) if watch_secs else 0.0
-        completion_rate = round((completed / views) * 100.0, 1) if views else 0.0
+            raw_views = qualified_views = likes = comments = total_watch_seconds = 0
+            watch_hours = completion_rate = 0.0
+            coin_v = pass_v = sub_v = ad_v = free_v = 0
+
         rows.append(
             ContentRow(
                 series_id=s.id,
                 title=s.title,
-                views=views,
+                views=qualified_views,
+                qualified_views=qualified_views,
+                total_raw_views=raw_views,
+                coin_views=coin_v,
+                pass_views=pass_v,
+                subscription_views=sub_v,
+                ad_views=ad_v,
+                free_views=free_v,
+                total_watch_seconds=total_watch_seconds,
+                watch_hours=watch_hours,
                 likes=likes,
                 comments=comments,
                 popular_score=int(s.popular_score),
-                watch_hours=watch_hours,
                 completion_rate=completion_rate,
             )
         )
     return AnalyticsContent(top_content=rows)
+
+
+@router.get("/content/episodes", response_model=List[EpisodeContentRow])
+async def content_episodes_performance(
+    series_id: Optional[int] = None,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    query = select(Episode, Series).join(Series, Series.id == Episode.series_id)
+    if series_id is not None:
+        query = query.where(Episode.series_id == series_id).order_by(Episode.episode_number)
+    else:
+        query = query.order_by(desc(Episode.view_count)).limit(limit)
+
+    res = await db.execute(query)
+    ep_series_pairs = res.all()
+
+    out: List[EpisodeContentRow] = []
+    for ep, s in ep_series_pairs:
+        raw_views = int(
+            (await db.execute(select(func.count(ViewLog.id)).where(ViewLog.episode_id == ep.id))).scalar_one()
+        )
+        q_logs_res = await db.execute(
+            select(ViewLog).where(
+                ViewLog.episode_id == ep.id,
+                ViewLog.watch_time_seconds >= 60,
+            )
+        )
+        q_logs = q_logs_res.scalars().all()
+        qualified_views = len(q_logs)
+        likes = int((await db.execute(select(func.count(Like.id)).where(Like.episode_id == ep.id))).scalar_one())
+        comments = int((await db.execute(select(func.count(Comment.id)).where(Comment.episode_id == ep.id))).scalar_one())
+
+        total_watch_seconds = sum(v.watch_time_seconds for v in q_logs)
+        watch_hours = round(total_watch_seconds / 3600.0, 2) if total_watch_seconds else 0.0
+        completed_count = sum(1 for v in q_logs if v.completed)
+        completion_rate = round((completed_count / qualified_views) * 100.0, 1) if qualified_views else 0.0
+
+        coin_v, pass_v, sub_v, ad_v, free_v = await _categorize_views(
+            db, q_logs, {ep.id: ep}, {s.id: s.free_episode_count}
+        )
+
+        out.append(
+            EpisodeContentRow(
+                episode_id=ep.id,
+                series_id=s.id,
+                series_title=s.title,
+                episode_number=ep.episode_number,
+                title=ep.title,
+                views=qualified_views,
+                qualified_views=qualified_views,
+                total_raw_views=raw_views,
+                coin_views=coin_v,
+                pass_views=pass_v,
+                subscription_views=sub_v,
+                ad_views=ad_v,
+                free_views=free_v,
+                total_watch_seconds=total_watch_seconds,
+                watch_hours=watch_hours,
+                likes=likes,
+                comments=comments,
+                completion_rate=completion_rate,
+            )
+        )
+    return out
 
 
 @router.get("/revenue", response_model=AnalyticsRevenue)
@@ -184,7 +321,12 @@ async def retention(db: AsyncSession = Depends(get_db), _: User = Depends(get_cu
             res2 = await db.execute(
                 select(func.count(func.distinct(ViewLog.user_id)))
                 .join(User, User.id == ViewLog.user_id)
-                .where(User.created_at >= cohort_dt, User.created_at < cohort_dt + timedelta(days=1), ViewLog.created_at >= target)
+                .where(
+                    User.created_at >= cohort_dt,
+                    User.created_at < cohort_dt + timedelta(days=1),
+                    ViewLog.created_at >= target,
+                    ViewLog.watch_time_seconds >= 60,
+                )
             )
             return float(res2.scalar_one())
 

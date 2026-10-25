@@ -26,12 +26,15 @@ async def recompute_popular_scores(db: AsyncSession, limit: int = 200) -> int:
 
     watch_sums = await db.execute(
         select(ViewLog.episode_id, func.coalesce(func.sum(ViewLog.watch_time_seconds), 0))
+        .where(ViewLog.watch_time_seconds >= 60)
         .group_by(ViewLog.episode_id)
     )
     watch_map: dict[int, int] = {ep_id: int(s) for ep_id, s in watch_sums.all()}
 
     view_counts = await db.execute(
-        select(ViewLog.episode_id, func.count(ViewLog.id)).group_by(ViewLog.episode_id)
+        select(ViewLog.episode_id, func.count(ViewLog.id))
+        .where(ViewLog.watch_time_seconds >= 60)
+        .group_by(ViewLog.episode_id)
     )
     views_map: dict[int, int] = {ep_id: int(c) for ep_id, c in view_counts.all()}
 

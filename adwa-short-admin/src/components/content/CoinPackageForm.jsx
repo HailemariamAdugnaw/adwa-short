@@ -13,7 +13,6 @@ export function CoinPackageForm({ initial, onSaved, onCancel }) {
     name: '',
     coins: 0,
     price_birr: 0,
-    episodes_unlocked: 0,
     is_active: true,
     sort_order: 0,
   })
@@ -24,7 +23,6 @@ export function CoinPackageForm({ initial, onSaved, onCancel }) {
       name: initial.name,
       coins: initial.coins,
       price_birr: initial.price_birr,
-      episodes_unlocked: initial.episodes_unlocked,
       is_active: initial.is_active,
       sort_order: initial.sort_order,
     })
@@ -76,22 +74,14 @@ export function CoinPackageForm({ initial, onSaved, onCancel }) {
           onChange={(e) => setForm((f) => ({ ...f, price_birr: Number(e.target.value) }))}
           required
         />
-        <Input
-          label="Episodes Unlocked"
-          type="number"
-          min={0}
-          value={form.episodes_unlocked}
-          onChange={(e) => setForm((f) => ({ ...f, episodes_unlocked: Number(e.target.value) }))}
-          hint="How many episodes this unlocks"
-        />
-        <Input
-          label="Sort Order"
-          type="number"
-          min={0}
-          value={form.sort_order ?? 0}
-          onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))}
-        />
       </div>
+      <Input
+        label="Sort Order"
+        type="number"
+        min={0}
+        value={form.sort_order ?? 0}
+        onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))}
+      />
       <label className="flex h-12 cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-surface-2 px-4 py-2 hover:border-border-strong">
         <span className="text-sm font-medium text-text-primary">Active</span>
         <input

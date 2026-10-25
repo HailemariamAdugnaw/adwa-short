@@ -189,15 +189,23 @@ async def test_calculate_pass_consumption_prorates_by_watch_time():
         svc = RevenueService(s)
         txs = await svc.calculate_pass_consumption(user_id, purchase_id)
         await s.commit()
+        # View 1 is 60s (qualifies >= 60s), View 2 is 40s (under 60s, excluded)
+        # Pass duration is 1 hr (3600s), price is 100 Birr -> rate_per_second = 100/3600
+        # Creator 1 share: 60 * (100/3600) * 0.5 = ~0.8333 Birr
+        # Creator 2: 0 (view < 60s)
+        # Unconsumed pass: 100 - gross_attributed = ~98.33 Birr (100% platform share)
         assert len(txs) == 2
-        total_creator_share = sum(float(t.creator_share_birr) for t in txs)
-        assert 0 < total_creator_share <= 50.0
-        for t in txs:
-            assert t.source_type == "pass_consumption"
-            assert t.gross_amount_birr == 100.0
+        pass_tx = next(t for t in txs if t.source_type == "pass_consumption")
+        unconsumed_tx = next(t for t in txs if t.source_type == "unconsumed_pass")
+        assert pass_tx.creator_id == c1
+        assert float(pass_tx.creator_share_birr) > 0
+        assert unconsumed_tx.creator_id is None
+        assert float(unconsumed_tx.creator_share_birr) == 0.0
+        assert float(unconsumed_tx.platform_share_birr) > 0
+        assert round(float(pass_tx.gross_amount_birr) + float(unconsumed_tx.gross_amount_birr), 2) == 100.0
 
 
-async def test_calculate_pass_consumption_no_views_returns_empty():
+async def test_calculate_pass_consumption_no_views_returns_unconsumed():
     creator_id, ep_id, user_id = await _seed_episode_with_creator()
     async with AsyncSessionLocal() as s:
         tp = TimePass(name="TP2", duration_hours=1, price_birr=50.0, is_active=True)
@@ -220,7 +228,12 @@ async def test_calculate_pass_consumption_no_views_returns_empty():
         svc = RevenueService(s)
         txs = await svc.calculate_pass_consumption(uid, pid)
         await s.commit()
-        assert txs == []
+        # Unconsumed pass remains 100% with ADWA SHORT
+        assert len(txs) == 1
+        assert txs[0].source_type == "unconsumed_pass"
+        assert float(txs[0].gross_amount_birr) == 50.0
+        assert float(txs[0].creator_share_birr) == 0.0
+        assert float(txs[0].platform_share_birr) == 50.0
 
 
 async def test_check_expired_passes_marks_inactive():
@@ -267,3 +280,87 @@ async def test_admin_process_expired(client, admin_headers):
     body = res.json()
     assert "processed_passes" in body
     assert "transactions_created" in body
+
+
+async def test_valid_view_rule_and_coin_revenue_attribution(client, auth_headers):
+    # Rule 1: < 60s not qualified; >= 60s qualified and triggers coin revenue immediately if unlocked
+    creator_id, ep_id, user_id = await _seed_episode_with_creator(creator_split=60.0)
+    async with AsyncSessionLocal() as s:
+        wres = await s.execute(select(Wallet).where(Wallet.user_id == user_id))
+        w = wres.scalar_one()
+        w.balance_coins = 50
+        await s.commit()
+
+    # Spend coins to unlock episode
+    unlock_res = await client.post(f"/episodes/{ep_id}/unlock", headers=auth_headers)
+    assert unlock_res.status_code == 200
+
+    # View under 60 seconds (e.g. 45s) -> NOT qualified
+    v_short = await client.post(
+        "/engagement/view",
+        json={"episode_id": ep_id, "watch_time_seconds": 45, "completed": False},
+        headers=auth_headers,
+    )
+    assert v_short.status_code == 201
+
+    async with AsyncSessionLocal() as s:
+        ep = (await s.execute(select(Episode).where(Episode.id == ep_id))).scalar_one()
+        assert ep.view_count == 0  # <60s does NOT increment view_count!
+
+        # Creator revenue transaction must NOT be created yet
+        rev_tx = (
+            await s.execute(
+                select(RevenueTransaction).where(
+                    RevenueTransaction.source_type == "coin_payment",
+                    RevenueTransaction.episode_id == ep_id,
+                )
+            )
+        ).scalar_one_or_none()
+        assert rev_tx is None
+
+    # Now view for >= 60 seconds (e.g. 75s) -> QUALIFIED!
+    v_qual = await client.post(
+        "/engagement/view",
+        json={"episode_id": ep_id, "watch_time_seconds": 75, "completed": True},
+        headers=auth_headers,
+    )
+    assert v_qual.status_code == 201
+
+    async with AsyncSessionLocal() as s:
+        ep = (await s.execute(select(Episode).where(Episode.id == ep_id))).scalar_one()
+        assert ep.view_count == 1  # Qualified view incremented!
+
+        # Creator revenue transaction MUST be created immediately
+        rev_tx = (
+            await s.execute(
+                select(RevenueTransaction).where(
+                    RevenueTransaction.source_type == "coin_payment",
+                    RevenueTransaction.episode_id == ep_id,
+                )
+            )
+        ).scalar_one_or_none()
+        assert rev_tx is not None
+        assert float(rev_tx.gross_amount_birr) == 10.0
+        assert float(rev_tx.creator_share_birr) == 6.0  # 60% split
+        assert float(rev_tx.platform_share_birr) == 4.0
+
+
+async def test_admin_content_analytics_granular_breakdown(client, admin_headers):
+    res = await client.get("/admin/analytics/content", headers=admin_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "top_content" in data
+    for item in data["top_content"]:
+        assert "qualified_views" in item
+        assert "coin_views" in item
+        assert "pass_views" in item
+        assert "subscription_views" in item
+        assert "ad_views" in item
+        assert "free_views" in item
+        assert "total_watch_seconds" in item
+
+
+async def test_admin_payouts_audit_endpoint(client, admin_headers):
+    res = await client.get("/admin/revenue/payouts", headers=admin_headers)
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)

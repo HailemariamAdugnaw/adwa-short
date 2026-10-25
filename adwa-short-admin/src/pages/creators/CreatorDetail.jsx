@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   ChevronLeft,
@@ -19,14 +19,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useCreator, useCreatorRevenue, useCreatorContent, useCreatorPayouts } from '../../lib/hooks'
-import { del, errMsg } from '../../lib/api'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { Tabs } from '../../components/ui/Tabs'
 import { StatCard } from '../../components/ui/StatCard'
-import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import {
   Table,
   TBody,
@@ -41,7 +39,6 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { AreaChartCard } from '../../components/charts/AreaChartCard'
 import { DonutChartCard } from '../../components/charts/DonutChartCard'
 import { CreatorForm } from '../../components/content/CreatorForm'
-import { SplitRuleForm } from '../../components/content/SplitRuleForm'
 import { PayoutForm } from '../../components/content/PayoutForm'
 import {
   formatBirr,
@@ -61,21 +58,10 @@ export function CreatorDetail() {
   const { data: payouts, isLoading: loadingPayouts } = useCreatorPayouts(id)
 
   const [tab, setTab] = useState('overview')
+  const [contentViewMode, setContentViewMode] = useState('series')
+  const [revenueViewMode, setRevenueViewMode] = useState('series')
   const [editOpen, setEditOpen] = useState(false)
   const [payoutOpen, setPayoutOpen] = useState(false)
-  const [splitOpen, setSplitOpen] = useState(false)
-  const [editRule, setEditRule] = useState(undefined)
-  const [deleteRule, setDeleteRule] = useState(null)
-
-  const deleteRuleMutation = useMutation({
-    mutationFn: async (ruleId) => del(`/creators/${id}/split/${ruleId}`),
-    onSuccess: () => {
-      toast.success('Split rule deleted')
-      qc.invalidateQueries({ queryKey: ['creators', id] })
-      setDeleteRule(null)
-    },
-    onError: (e) => toast.error(errMsg(e, 'Failed to delete rule')),
-  })
 
   if (isLoading || !creator) {
     return (
@@ -91,7 +77,10 @@ export function CreatorDetail() {
   }
 
   const rules = Array.isArray(creator.split_rules) ? creator.split_rules : []
-  const seriesList = Array.isArray(content) ? content : []
+  const contentList = Array.isArray(content) ? content : []
+  const seriesItems = contentList.filter((item) => item.is_series)
+  const episodeItems = contentList.filter((item) => !item.is_series)
+  const seriesList = seriesItems
   const monthly = Array.isArray(revenue?.by_month) ? revenue.by_month : []
   const payoutsList = Array.isArray(payouts) ? payouts : []
   const pendingBalance =
@@ -182,6 +171,83 @@ export function CreatorDetail() {
               </div>
             </div>
           </Card>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Card padding="md">
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-accent" />
+                  Linked Bank &amp; Payout Account
+                </CardTitle>
+              </CardHeader>
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Bank / Service</span>
+                  <span className="font-medium text-text-primary">{creator.bank_name || 'Not configured'}</span>
+                </div>
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Account Holder</span>
+                  <span className="font-medium text-text-primary">{creator.bank_account_name || '—'}</span>
+                </div>
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Account Number</span>
+                  <span className="font-mono text-text-primary">{creator.bank_account_number || '—'}</span>
+                </div>
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Payout Method</span>
+                  <span className="font-medium capitalize text-text-primary">{creator.payment_method || 'Bank Transfer'}</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card padding="md">
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-accent" />
+                  Legal Contract &amp; Custom Split Rules
+                </CardTitle>
+              </CardHeader>
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Contract Status</span>
+                  {creator.legal_contract_url ? (
+                    <a
+                      href={creator.legal_contract_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-accent hover:underline flex items-center gap-1"
+                    >
+                      View Signed Agreement ({formatDate(creator.contract_signed_date)})
+                    </a>
+                  ) : (
+                    <span className="text-text-muted">No contract on file</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Default Split Ratio</span>
+                  <span className="font-semibold text-text-primary">
+                    {formatPercent(creator.default_revenue_split_pct ?? 50, 0)} Creator / {formatPercent(100 - (creator.default_revenue_split_pct ?? 50), 0)} Platform
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+                  <span className="text-text-secondary">Active Split Overrides</span>
+                  <span className="font-medium text-text-primary">
+                    {rules.length} rule{rules.length === 1 ? '' : 's'} configured
+                  </span>
+                </div>
+                <div className="pt-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full text-xs"
+                    leftIcon={<Pencil className="h-3.5 w-3.5" />}
+                    onClick={() => setEditOpen(true)}
+                  >
+                    Edit Creator Info &amp; Revenue Split
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       ),
     },
@@ -190,45 +256,144 @@ export function CreatorDetail() {
       label: 'Content',
       content: (
         <Card padding="none" className="overflow-hidden">
+          <CardHeader className="border-b border-border px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Creator Content</CardTitle>
+              <p className="text-xs text-text-muted mt-0.5">
+                Qualified views (≥1 min) per series and individual episodes.
+              </p>
+            </div>
+            <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5 text-xs">
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                  contentViewMode === 'series'
+                    ? 'bg-accent text-white shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+                onClick={() => setContentViewMode('series')}
+              >
+                Series ({seriesItems.length})
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                  contentViewMode === 'episode'
+                    ? 'bg-accent text-white shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+                onClick={() => setContentViewMode('episode')}
+              >
+                Episodes ({episodeItems.length})
+              </button>
+            </div>
+          </CardHeader>
           <Table>
-            <THead>
-              <TR>
-                <TH>Series</TH>
-                <TH className="text-right">Eps</TH>
-                <TH className="text-right">Views</TH>
-                <TH>Status</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {loadingContent ? (
-                <SkeletonRow colSpan={4} rows={5} />
-              ) : seriesList.length === 0 ? (
-                <EmptyRow colSpan={4}>
-                  <EmptyState
-                    icon={FileText}
-                    title="No content yet"
-                    description="This creator has no series assigned yet."
-                  />
-                </EmptyRow>
-              ) : (
-                seriesList.map((s) => (
-                  <TR key={`${s.series_id ?? 's'}-${s.episode_id ?? 'e'}`}>
-                    <TD className="font-medium">{s.title}</TD>
-                    <TD className="text-right tabular-nums">
-                      {formatNumber(s.episodes_count ?? 0)}
-                    </TD>
-                    <TD className="text-right tabular-nums">
-                      {formatNumber(s.view_count ?? 0, { compact: true })}
-                    </TD>
-                    <TD>
-                      <Badge tone={s.is_series ? 'accent' : 'neutral'}>
-                        {s.is_series ? 'Series' : 'Episode'}
-                      </Badge>
-                    </TD>
+            {contentViewMode === 'series' ? (
+              <>
+                <THead>
+                  <TR>
+                    <TH>Series Name</TH>
+                    <TH className="text-center">Total Number of Episodes</TH>
+                    <TH className="text-right">View by Coin</TH>
+                    <TH className="text-right">View by Time Pass</TH>
+                    <TH className="text-right">View by Subscription</TH>
+                    <TH className="text-right">View by Ad</TH>
+                    <TH className="text-right">Total Number of Views of the Series</TH>
                   </TR>
-                ))
-              )}
-            </TBody>
+                </THead>
+                <TBody>
+                  {loadingContent ? (
+                    <SkeletonRow colSpan={7} rows={4} />
+                  ) : seriesItems.length === 0 ? (
+                    <EmptyRow colSpan={7}>
+                      <EmptyState
+                        icon={FileText}
+                        title="No series assigned"
+                        description="This creator has no series assigned yet."
+                      />
+                    </EmptyRow>
+                  ) : (
+                    seriesItems.map((item) => (
+                      <TR key={`series-${item.series_id}`}>
+                        <TD className="font-medium text-text-primary">{item.title}</TD>
+                        <TD className="text-center tabular-nums text-text-secondary">
+                          {formatNumber(item.episodes_count ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-amber-400">
+                          {formatNumber(item.coin_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-emerald-400">
+                          {formatNumber(item.pass_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-purple-400">
+                          {formatNumber(item.subscription_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-sky-400">
+                          {formatNumber(item.ad_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-semibold text-text-primary">
+                          {formatNumber(item.total_views ?? item.view_count ?? 0)}
+                        </TD>
+                      </TR>
+                    ))
+                  )}
+                </TBody>
+              </>
+            ) : (
+              <>
+                <THead>
+                  <TR>
+                    <TH>Episode Title</TH>
+                    <TH className="w-24 text-center">Episode Number</TH>
+                    <TH>Series It Contained</TH>
+                    <TH className="text-right">View by Coin</TH>
+                    <TH className="text-right">View by Time Pass</TH>
+                    <TH className="text-right">View by Subscription</TH>
+                    <TH className="text-right">View by Ad</TH>
+                    <TH className="text-right">Total Number of Views of the Episode</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {loadingContent ? (
+                    <SkeletonRow colSpan={8} rows={5} />
+                  ) : episodeItems.length === 0 ? (
+                    <EmptyRow colSpan={8}>
+                      <EmptyState
+                        icon={FileText}
+                        title="No episodes assigned"
+                        description="This creator has no episodes assigned yet."
+                      />
+                    </EmptyRow>
+                  ) : (
+                    episodeItems.map((item) => (
+                      <TR key={`ep-${item.episode_id}`}>
+                        <TD className="font-medium text-text-primary">{item.title}</TD>
+                        <TD className="text-center font-mono text-xs">
+                          {item.episode_number != null ? `#${item.episode_number}` : '—'}
+                        </TD>
+                        <TD className="text-text-secondary">{item.series_title || '—'}</TD>
+                        <TD className="text-right tabular-nums font-medium text-amber-400">
+                          {formatNumber(item.coin_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-emerald-400">
+                          {formatNumber(item.pass_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-purple-400">
+                          {formatNumber(item.subscription_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-medium text-sky-400">
+                          {formatNumber(item.ad_views ?? 0)}
+                        </TD>
+                        <TD className="text-right tabular-nums font-semibold text-text-primary">
+                          {formatNumber(item.total_views ?? item.view_count ?? 0)}
+                        </TD>
+                      </TR>
+                    ))
+                  )}
+                </TBody>
+              </>
+            )}
           </Table>
         </Card>
       ),
@@ -262,23 +427,23 @@ export function CreatorDetail() {
             />
             <Card padding="md">
               <CardHeader>
-                <CardTitle>Breakdown</CardTitle>
+                <CardTitle>Revenue Summary</CardTitle>
               </CardHeader>
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-xs text-text-secondary">Gross</span>
+                  <span className="text-xs text-text-secondary">Gross Attributed</span>
                   <span className="text-sm font-semibold tabular-nums">
                     {formatBirr(grossRevenue)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-xs text-text-secondary">Creator Net</span>
+                  <span className="text-xs text-text-secondary">Creator Net Payable</span>
                   <span className="text-sm font-semibold tabular-nums text-success">
                     {formatBirr(creatorNet)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-xs text-text-secondary">Platform</span>
+                  <span className="text-xs text-text-secondary">Platform Share</span>
                   <span className="text-sm font-semibold tabular-nums text-accent">
                     {formatBirr(platformShare)}
                   </span>
@@ -292,6 +457,136 @@ export function CreatorDetail() {
               </div>
             </Card>
           </div>
+
+          <Card padding="none" className="overflow-hidden">
+            <CardHeader className="border-b border-border px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle>Content Revenue Breakdown</CardTitle>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Revenue breakdown by content item (Coins, Time Passes, Subscriptions).
+                </p>
+              </div>
+              <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5 text-xs">
+                <button
+                  type="button"
+                  className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                    revenueViewMode === 'series'
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                  onClick={() => setRevenueViewMode('series')}
+                >
+                  Series ({seriesItems.length})
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                    revenueViewMode === 'episode'
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                  onClick={() => setRevenueViewMode('episode')}
+                >
+                  Episodes ({episodeItems.length})
+                </button>
+              </div>
+            </CardHeader>
+            <Table>
+              {revenueViewMode === 'series' ? (
+                <>
+                  <THead>
+                    <TR>
+                      <TH>Series Name</TH>
+                      <TH className="text-right">Revenue by Coin</TH>
+                      <TH className="text-right">Revenue by Time Pass</TH>
+                      <TH className="text-right">Revenue by Subscription</TH>
+                      <TH className="text-right">Total Revenue</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {loadingContent ? (
+                      <SkeletonRow colSpan={5} rows={4} />
+                    ) : seriesItems.length === 0 ? (
+                      <EmptyRow colSpan={5}>
+                        <EmptyState
+                          icon={Wallet}
+                          title="No series revenue"
+                          description="No series revenue transactions found for this creator."
+                        />
+                      </EmptyRow>
+                    ) : (
+                      seriesItems.map((item) => (
+                        <TR key={`rev-s-${item.series_id}`}>
+                          <TD className="font-medium text-text-primary">{item.title}</TD>
+                          <TD className="text-right tabular-nums text-amber-400 font-medium">
+                            {formatBirr(item.revenue_coins_birr ?? 0)}
+                          </TD>
+                          <TD className="text-right tabular-nums text-emerald-400 font-medium">
+                            {formatBirr(item.revenue_pass_birr ?? 0)}
+                          </TD>
+                          <TD className="text-right tabular-nums text-purple-400 font-medium">
+                            {formatBirr(item.revenue_sub_birr ?? 0)}
+                          </TD>
+                          <TD className="text-right tabular-nums font-semibold text-success">
+                            {formatBirr(item.total_revenue_birr ?? 0)}
+                          </TD>
+                        </TR>
+                      ))
+                    )}
+                  </TBody>
+                </>
+              ) : (
+                <>
+                  <THead>
+                    <TR>
+                      <TH>Episode Title</TH>
+                      <TH className="w-24 text-center">Episode Number</TH>
+                      <TH>Series It Contained</TH>
+                      <TH className="text-right">Revenue by Coin</TH>
+                      <TH className="text-right">Revenue by Time Pass</TH>
+                      <TH className="text-right">Revenue by Subscription</TH>
+                      <TH className="text-right">Total Revenue</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {loadingContent ? (
+                      <SkeletonRow colSpan={7} rows={5} />
+                    ) : episodeItems.length === 0 ? (
+                      <EmptyRow colSpan={7}>
+                        <EmptyState
+                          icon={Wallet}
+                          title="No episode revenue"
+                          description="No episode revenue transactions found for this creator."
+                        />
+                      </EmptyRow>
+                    ) : (
+                      episodeItems.map((item) => (
+                        <TR key={`rev-ep-${item.episode_id}`}>
+                          <TD className="font-medium text-text-primary">{item.title}</TD>
+                          <TD className="text-center font-mono text-xs">
+                            {item.episode_number != null ? `#${item.episode_number}` : '—'}
+                          </TD>
+                          <TD className="text-text-secondary">{item.series_title || '—'}</TD>
+                          <TD className="text-right tabular-nums text-amber-400 font-medium">
+                            {formatBirr(item.revenue_coins_birr ?? 0)}
+                          </TD>
+                          <TD className="text-right tabular-nums text-emerald-400 font-medium">
+                            {formatBirr(item.revenue_pass_birr ?? 0)}
+                          </TD>
+                          <TD className="text-right tabular-nums text-purple-400 font-medium">
+                            {formatBirr(item.revenue_sub_birr ?? 0)}
+                          </TD>
+                          <TD className="text-right tabular-nums font-semibold text-success">
+                            {formatBirr(item.total_revenue_birr ?? 0)}
+                          </TD>
+                        </TR>
+                      ))
+                    )}
+                  </TBody>
+                </>
+              )}
+            </Table>
+          </Card>
         </div>
       ),
     },
@@ -350,99 +645,6 @@ export function CreatorDetail() {
                     <TD className="text-xs text-text-secondary">{p.notes ?? '—'}</TD>
                   </TR>
                 ))
-              )}
-            </TBody>
-          </Table>
-        </Card>
-      ),
-    },
-    {
-      id: 'splits',
-      label: 'Split Rules',
-      content: (
-        <Card padding="none" className="overflow-hidden">
-          <CardHeader className="border-b border-border px-5 py-3">
-            <CardTitle>Split Rules ({rules.length})</CardTitle>
-            <Button
-              size="sm"
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
-              onClick={() => {
-                setEditRule(undefined)
-                setSplitOpen(true)
-              }}
-            >
-              Add Rule
-            </Button>
-          </CardHeader>
-          <Table>
-            <THead>
-              <TR>
-                <TH>Scope</TH>
-                <TH>Target</TH>
-                <TH className="text-right">Creator Share</TH>
-                <TH className="text-right">Platform Share</TH>
-                <TH className="text-right">Actions</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {rules.length === 0 ? (
-                <EmptyRow colSpan={5}>
-                  <EmptyState
-                    icon={Scissors}
-                    title="No split rules"
-                    description="Only the creator default split is in effect. Add per-series or per-episode overrides as needed."
-                  />
-                </EmptyRow>
-              ) : (
-                rules.map((r) => {
-                  const scope = r.episode_id
-                    ? 'Episode'
-                    : r.series_id
-                      ? 'Series'
-                      : 'Creator'
-                  const target = r.episode_id
-                    ? `Episode #${r.episode_id}`
-                    : r.series_id
-                      ? `Series #${r.series_id}`
-                      : 'All content'
-                  return (
-                    <TR key={r.id}>
-                      <TD>
-                        <Badge tone={scope === 'Creator' ? 'neutral' : scope === 'Series' ? 'accent' : 'warning'}>
-                          {scope}
-                        </Badge>
-                      </TD>
-                      <TD className="text-text-secondary">{target}</TD>
-                      <TD className="text-right tabular-nums font-medium text-success">
-                        {formatPercent(r.creator_share_pct ?? 0, 0)}
-                      </TD>
-                      <TD className="text-right tabular-nums text-text-secondary">
-                        {formatPercent(100 - (r.creator_share_pct ?? 0), 0)}
-                      </TD>
-                      <TD>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditRule(r)
-                              setSplitOpen(true)
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteRule(r)}
-                          >
-                            <Trash2 className="h-4 w-4 text-danger" />
-                          </Button>
-                        </div>
-                      </TD>
-                    </TR>
-                  )
-                })
               )}
             </TBody>
           </Table>
@@ -568,32 +770,6 @@ export function CreatorDetail() {
           onCancel={() => setPayoutOpen(false)}
         />
       </Modal>
-
-      <Modal
-        open={splitOpen}
-        onClose={() => setSplitOpen(false)}
-        title={editRule ? 'Edit Split Rule' : 'Add Split Rule'}
-        size="md"
-      >
-        <SplitRuleForm
-          creatorId={id}
-          series={seriesList}
-          episodes={[]}
-          initial={editRule}
-          onSaved={() => setSplitOpen(false)}
-          onCancel={() => setSplitOpen(false)}
-        />
-      </Modal>
-
-      <ConfirmDialog
-        open={!!deleteRule}
-        title="Delete Split Rule?"
-        description="This split override will be removed. The creator default will apply."
-        confirmLabel="Delete"
-        onConfirm={() => deleteRule && deleteRuleMutation.mutate(deleteRule.id)}
-        onCancel={() => setDeleteRule(null)}
-        loading={deleteRuleMutation.isPending}
-      />
     </div>
   )
 }

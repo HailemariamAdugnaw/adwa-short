@@ -70,19 +70,22 @@ export function CreatorsList() {
     setPage(1)
   }
 
-  const SortTH = ({ k, children, className = '' }) => (
-    <TH
-      className={`cursor-pointer select-none ${className}`}
-      onClick={() => toggleSort(k)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {children}
-        <span className="text-text-muted">
-          {sortKey === k ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
+  const SortTH = ({ k, children, className = '' }) => {
+    const isRight = className.includes('text-right')
+    return (
+      <TH
+        className={`cursor-pointer select-none hover:text-text-primary transition-colors ${className}`}
+        onClick={() => toggleSort(k)}
+      >
+        <span className={`inline-flex items-center gap-1 ${isRight ? 'justify-end w-full' : ''}`}>
+          {children}
+          <span className="text-[10px] text-text-muted">
+            {sortKey === k ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
         </span>
-      </span>
-    </TH>
-  )
+      </TH>
+    )
+  }
 
   return (
     <div className="space-y-4">

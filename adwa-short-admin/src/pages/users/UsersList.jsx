@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Search, Users as UsersIcon, Eye, Ban, CheckCircle2 } from 'lucide-react'
 import { useUsers, useDebouncedValue } from '../../lib/hooks'
-import { put, errMsg } from '../../lib/api'
+import { post, errMsg } from '../../lib/api'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -21,7 +21,7 @@ import {
 import { Badge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { formatDate, initials } from '../../lib/format'
+import { formatBirr, formatNumber, formatDate, initials } from '../../lib/format'
 
 export function UsersList() {
   const navigate = useNavigate()
@@ -42,7 +42,7 @@ export function UsersList() {
   }, [debouncedQ, page, setSearchParams])
 
   const banMutation = useMutation({
-    mutationFn: async (u) => put(`/users/${u.id}/${u.is_banned ? 'unban' : 'ban'}`),
+    mutationFn: async (u) => post(`/admin/users/${u.id}/${u.is_banned ? 'unban' : 'ban'}`),
     onSuccess: (_d, u) => {
       toast.success(u.is_banned ? 'User unbanned' : 'User banned')
       qc.invalidateQueries({ queryKey: ['users'] })
@@ -111,9 +111,15 @@ export function UsersList() {
                       </div>
                     </div>
                   </TD>
-                  <TD className="font-mono text-xs">{u.phone}</TD>
-                  <TD className="text-right tabular-nums text-text-muted">—</TD>
-                  <TD className="text-right tabular-nums text-text-muted">—</TD>
+                  <TD className="font-mono text-xs text-text-secondary">{u.phone}</TD>
+                  <TD className="text-right tabular-nums font-medium text-emerald-400">
+                    {formatBirr(u.balance_birr ?? 0)}
+                  </TD>
+                  <TD className="text-right tabular-nums font-medium text-amber-400">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      🪙 {formatNumber(u.balance_coins ?? 0)}
+                    </span>
+                  </TD>
                   <TD>
                     {u.is_banned ? (
                       <Badge tone="danger">Banned</Badge>

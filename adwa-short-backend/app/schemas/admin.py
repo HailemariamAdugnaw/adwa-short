@@ -65,12 +65,41 @@ class AnalyticsOverview(BaseModel):
 class ContentRow(BaseModel):
     series_id: int
     title: str
-    views: int
-    likes: int
-    comments: int
-    popular_score: int
-    watch_hours: float
-    completion_rate: float
+    views: int = 0
+    qualified_views: int = 0
+    total_raw_views: int = 0
+    coin_views: int = 0
+    pass_views: int = 0
+    subscription_views: int = 0
+    ad_views: int = 0
+    free_views: int = 0
+    total_watch_seconds: int = 0
+    watch_hours: float = 0.0
+    likes: int = 0
+    comments: int = 0
+    popular_score: int = 0
+    completion_rate: float = 0.0
+
+
+class EpisodeContentRow(BaseModel):
+    episode_id: int
+    series_id: int
+    series_title: str
+    episode_number: int
+    title: str
+    views: int = 0
+    qualified_views: int = 0
+    total_raw_views: int = 0
+    coin_views: int = 0
+    pass_views: int = 0
+    subscription_views: int = 0
+    ad_views: int = 0
+    free_views: int = 0
+    total_watch_seconds: int = 0
+    watch_hours: float = 0.0
+    likes: int = 0
+    comments: int = 0
+    completion_rate: float = 0.0
 
 
 class RevenueRow(BaseModel):
@@ -88,6 +117,7 @@ class RetentionRow(BaseModel):
 
 class AnalyticsContent(BaseModel):
     top_content: List[ContentRow]
+    episodes: Optional[List[EpisodeContentRow]] = None
 
 
 class AnalyticsRevenue(BaseModel):

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -130,40 +130,102 @@ async def revenue_by_creator(
 
 @router.get("/by-content", response_model=List[RevenueByContentRow])
 async def revenue_by_content(
-    limit: int = Query(default=50, le=500),
+    creator_id: Optional[int] = Query(default=None),
+    series_id: Optional[int] = Query(default=None),
+    limit: int = Query(default=100, le=500),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_admin),
 ):
-    res = await db.execute(
+    stmt = (
         select(
             RevenueTransaction.series_id,
             RevenueTransaction.episode_id,
+            func.coalesce(RevenueTransaction.creator_id, Episode.creator_id, Series.creator_id).label("creator_id"),
             func.coalesce(func.sum(RevenueTransaction.gross_amount_birr), 0).label("gross"),
             func.coalesce(func.sum(RevenueTransaction.creator_share_birr), 0).label("creator_share"),
             func.coalesce(func.sum(RevenueTransaction.platform_share_birr), 0).label("platform_share"),
         )
-        .group_by(RevenueTransaction.series_id, RevenueTransaction.episode_id)
+        .select_from(RevenueTransaction)
+        .join(Episode, Episode.id == RevenueTransaction.episode_id, isouter=True)
+        .join(Series, Series.id == func.coalesce(RevenueTransaction.series_id, Episode.series_id), isouter=True)
+    )
+    if creator_id is not None:
+        stmt = stmt.where(
+            or_(
+                RevenueTransaction.creator_id == creator_id,
+                Episode.creator_id == creator_id,
+                Series.creator_id == creator_id,
+            )
+        )
+    if series_id is not None:
+        stmt = stmt.where(
+            or_(
+                RevenueTransaction.series_id == series_id,
+                Episode.series_id == series_id,
+            )
+        )
+    stmt = (
+        stmt.group_by(
+            RevenueTransaction.series_id,
+            RevenueTransaction.episode_id,
+            func.coalesce(RevenueTransaction.creator_id, Episode.creator_id, Series.creator_id),
+        )
         .order_by(desc("gross"))
         .limit(limit)
     )
+    res = await db.execute(stmt)
+
+    creators_res = await db.execute(select(Creator))
+    creators_map = {c.id: (c.display_name or c.name) for c in creators_res.scalars().all()}
+
+    series_res = await db.execute(select(Series))
+    series_map = {s.id: s for s in series_res.scalars().all()}
+
+    episodes_res = await db.execute(select(Episode))
+    episodes_map = {e.id: e for e in episodes_res.scalars().all()}
+
     out: List[RevenueByContentRow] = []
-    for sid, eid, gross, creator_share, platform_share in res.all():
+    for sid, eid, cid, gross, creator_share, platform_share in res.all():
         title = "Unknown"
+        series_title = None
+        content_type = "series"
+
+        resolved_cid = cid
+        resolved_sid = sid
+
         if eid is not None:
-            er = await db.execute(select(Episode).where(Episode.id == eid))
-            ep = er.scalar_one_or_none()
+            content_type = "episode"
+            ep = episodes_map.get(eid)
             if ep is not None:
-                title = ep.title
-        elif sid is not None:
-            sr = await db.execute(select(Series).where(Series.id == sid))
-            s = sr.scalar_one_or_none()
-            if s is not None:
-                title = s.title
+                title = f"Ep #{ep.episode_number}: {ep.title}"
+                resolved_sid = ep.series_id
+                if not resolved_cid and ep.creator_id:
+                    resolved_cid = ep.creator_id
+            ser = series_map.get(resolved_sid) if resolved_sid else None
+            if ser is not None:
+                series_title = ser.title
+                if not resolved_cid and ser.creator_id:
+                    resolved_cid = ser.creator_id
+        elif resolved_sid is not None:
+            content_type = "series"
+            ser = series_map.get(resolved_sid)
+            if ser is not None:
+                title = ser.title
+                series_title = ser.title
+                if not resolved_cid and ser.creator_id:
+                    resolved_cid = ser.creator_id
+
+        creator_name = creators_map.get(resolved_cid) if resolved_cid else None
+
         out.append(
             RevenueByContentRow(
-                series_id=sid,
+                series_id=resolved_sid,
                 episode_id=eid,
+                creator_id=resolved_cid,
+                creator_name=creator_name,
+                series_title=series_title,
                 title=title,
+                content_type=content_type,
                 gross_birr=float(gross or 0),
                 creator_share_birr=float(creator_share or 0),
                 platform_share_birr=float(platform_share or 0),
@@ -235,3 +297,38 @@ async def process_expired(
     result = await check_expired_passes(db)
     await db.commit()
     return ProcessExpiredResult(**result)
+
+
+@router.get("/payouts", response_model=List[dict])
+async def list_all_payouts(
+    creator_id: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    stmt = (
+        select(Payout, Creator.name.label("creator_name"))
+        .join(Creator, Creator.id == Payout.creator_id, isouter=True)
+    )
+    if creator_id is not None:
+        stmt = stmt.where(Payout.creator_id == creator_id)
+    if status_filter:
+        stmt = stmt.where(Payout.status == status_filter)
+    stmt = stmt.order_by(desc(Payout.created_at)).limit(limit)
+    res = await db.execute(stmt)
+    out = []
+    for p, cname in res.all():
+        out.append({
+            "id": p.id,
+            "creator_id": p.creator_id,
+            "creator_name": cname or f"Creator #{p.creator_id}",
+            "amount_birr": float(p.amount_birr),
+            "status": p.status,
+            "processed_at": p.processed_at.isoformat() if p.processed_at else None,
+            "processed_by_admin_id": p.processed_by_admin_id,
+            "reference": p.reference,
+            "notes": p.notes,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
+    return out

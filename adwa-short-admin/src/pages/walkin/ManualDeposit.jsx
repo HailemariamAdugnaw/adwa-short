@@ -305,8 +305,12 @@ export function ManualDeposit() {
               (Array.isArray(deposits) ? deposits : []).map((d) => (
                 <TR key={d.id}>
                   <TD>
-                    <p className="font-medium">{d.user?.display_name ?? d.user?.phone ?? '—'}</p>
-                    <p className="font-mono text-[10px] text-text-muted">User #{d.user_id ?? '—'}</p>
+                    <p className="font-medium text-text-primary">
+                      {d.user_display_name ?? d.user?.display_name ?? (d.user_phone ? d.user_phone : `User #${d.user_id}`)}
+                    </p>
+                    <p className="font-mono text-[10px] text-text-muted">
+                      {d.user_phone ? `${d.user_phone} · ` : ''}User #{d.user_id ?? '—'}
+                    </p>
                   </TD>
                   <TD className="text-right tabular-nums font-medium text-success">
                     +{formatBirr(d.amount_birr)}

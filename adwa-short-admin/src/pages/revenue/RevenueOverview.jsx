@@ -9,6 +9,10 @@ import {
   ArrowUpRight,
   AlertCircle,
   Receipt,
+  ShieldCheck,
+  Tv,
+  Hourglass,
+  Percent,
 } from 'lucide-react'
 import {
   useRevenueOverview,
@@ -16,11 +20,13 @@ import {
   useRevenueByMethod,
   useRevenueTransactions,
   useProcessExpiredPasses,
+  useAdminPayouts,
 } from '../../lib/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
+import { Badge } from '../../components/ui/Badge'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import {
@@ -34,7 +40,6 @@ import {
   EmptyRow,
 } from '../../components/ui/Table'
 import { DonutChartCard } from '../../components/charts/DonutChartCard'
-import { BarChartCard } from '../../components/charts/BarChartCard'
 import { formatBirr, formatDateTime, formatNumber } from '../../lib/format'
 
 function ErrorCard({ message, onRetry }) {
@@ -55,17 +60,40 @@ export function RevenueOverview() {
   const { data: byMethod, isLoading: loadingMethod, isError: methodError } = useRevenueByMethod()
   const { data: byCreator, isLoading: loadingCreators, isError: creatorsError } = useRevenueByCreator()
   const { data: txData, isLoading: loadingTx, isError: txError } = useRevenueTransactions({ limit: 20 })
+  const { data: payoutsData, isLoading: loadingPayouts } = useAdminPayouts({ limit: 10 })
   const processExpired = useProcessExpiredPasses()
   const [confirmExpired, setConfirmExpired] = useState(false)
 
   const methods = Array.isArray(byMethod) ? byMethod : []
   const creators = Array.isArray(byCreator) ? byCreator : []
   const txs = Array.isArray(txData?.items) ? txData.items : Array.isArray(txData) ? txData : []
+  const payoutsList = Array.isArray(payoutsData) ? payoutsData : []
+
+  // Compute Platform Share Breakdown components:
+  // 1. Ad Revenue (100% retained)
+  const adRevenueMethod = methods.find((m) => m.source_type === 'ad_revenue')
+  const adRevenuePlatform = Number(adRevenueMethod?.platform_share_birr ?? 0)
+
+  // 2. Unconsumed Pass / Sub (100% retained)
+  const unconsumedPassMethod = methods.find((m) => m.source_type === 'unconsumed_pass')
+  const unconsumedSubMethod = methods.find((m) => m.source_type === 'unconsumed_subscription')
+  const unconsumedPlatform =
+    Number(unconsumedPassMethod?.platform_share_birr ?? 0) +
+    Number(unconsumedSubMethod?.platform_share_birr ?? 0)
+
+  // 3. Split Fees from watched content (coins + passes + subs)
+  const coinMethod = methods.find((m) => m.source_type === 'coin_payment')
+  const passMethod = methods.find((m) => m.source_type === 'pass_consumption')
+  const subMethod = methods.find((m) => m.source_type === 'subscription_consumption')
+  const splitFeesPlatform =
+    Number(coinMethod?.platform_share_birr ?? 0) +
+    Number(passMethod?.platform_share_birr ?? 0) +
+    Number(subMethod?.platform_share_birr ?? 0)
 
   const methodDonut = methods.map((m, i) => ({
-    name: m.source_type ?? '—',
+    name: m.source_type ? m.source_type.replace('_', ' ') : '—',
     value: Number(m.gross_birr ?? 0),
-    color: ['#C8102E', '#10B981', '#F59E0B', '#A3A3A3'][i % 4],
+    color: ['#C8102E', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#A3A3A3'][i % 6],
   }))
 
   const top5 = creators.slice(0, 5).map((c) => ({
@@ -83,9 +111,9 @@ export function RevenueOverview() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-text-primary">Revenue Overview</h2>
+          <h2 className="text-xl font-bold text-text-primary">Revenue &amp; Payout Summary</h2>
           <p className="text-sm text-text-secondary">
-            Aggregate platform revenue, creator payouts, and method mix.
+            Aggregate revenue generation, platform retention breakdown, and creator payout audit trails.
           </p>
         </div>
         <Button
@@ -105,57 +133,111 @@ export function RevenueOverview() {
         />
       )}
 
+      {/* KPI Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Gross Revenue"
+          label="Gross Revenue Generated"
           value={formatBirr(totalGross, { compact: true })}
           icon={<TrendingUp className="h-5 w-5" />}
           accent
+          hint="All coins, passes, subscriptions"
           loading={isLoading}
         />
         <StatCard
           label="Platform Share"
           value={formatBirr(totalPlatform, { compact: true })}
-          icon={<Wallet className="h-5 w-5" />}
+          icon={<Wallet className="h-5 w-5 text-accent" />}
+          hint="Split fees + unconsumed + ads"
           loading={isLoading}
         />
         <StatCard
-          label="Total Creator Payouts"
-          value={formatBirr(totalPaidOut, { compact: true })}
-          icon={<HandCoins className="h-5 w-5" />}
-          loading={isLoading}
-        />
-        <StatCard
-          label="Pending Balances"
+          label="Creator Net Payable"
           value={formatBirr(totalPending, { compact: true })}
-          icon={<Clock3 className="h-5 w-5" />}
+          icon={<Clock3 className="h-5 w-5 text-amber-500" />}
+          hint="Pending balance owed"
+          loading={isLoading}
+        />
+        <StatCard
+          label="Total Settled Payouts"
+          value={formatBirr(totalPaidOut, { compact: true })}
+          icon={<HandCoins className="h-5 w-5 text-emerald-500" />}
+          hint="Processed creator payouts"
           loading={isLoading}
         />
       </div>
 
+      {/* Platform Share Breakdown Details */}
+      <Card padding="md">
+        <CardHeader className="mb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-accent" />
+            Platform Share Composition &amp; Retention Breakdown
+          </CardTitle>
+          <span className="text-xs text-text-muted">Total: {formatBirr(totalPlatform)}</span>
+        </CardHeader>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-border bg-surface-2/40 p-3.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              <Percent className="h-3.5 w-3.5 text-accent" />
+              Content Split Fees
+            </div>
+            <p className="mt-1.5 text-xl font-bold text-text-primary tabular-nums">
+              {formatBirr(splitFeesPlatform)}
+            </p>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              Platform share from watched Coin PPV &amp; time consumption
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-surface-2/40 p-3.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              <Hourglass className="h-3.5 w-3.5 text-amber-500" />
+              Unconsumed Pass Duration
+            </div>
+            <p className="mt-1.5 text-xl font-bold text-amber-500 tabular-nums">
+              {formatBirr(unconsumedPlatform)}
+            </p>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              100% retained by ADWA SHORT for unconsumed pass time
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-surface-2/40 p-3.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              <Tv className="h-3.5 w-3.5 text-sky-500" />
+              Ad-Supported Viewing
+            </div>
+            <p className="mt-1.5 text-xl font-bold text-sky-500 tabular-nums">
+              {formatBirr(adRevenuePlatform)}
+            </p>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              100% retained by ADWA SHORT (creators earn 0% on ads)
+            </p>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" padding="md">
           <CardHeader>
-            <CardTitle>Creator vs Platform Split</CardTitle>
+            <CardTitle>Creator vs Platform Net Attribution</CardTitle>
             <span className="text-[10px] uppercase tracking-wider text-text-muted">
-              {formatNumber(overview?.transaction_count ?? 0)} transactions
+              {formatNumber(overview?.transaction_count ?? 0)} transactions recorded
             </span>
           </CardHeader>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="rounded-md border border-border bg-surface-2/40 p-4">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Gross</p>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">Gross Generated</p>
               <p className="mt-1 text-2xl font-bold text-text-primary">
                 {formatBirr(totalGross, { compact: true })}
               </p>
             </div>
             <div className="rounded-md border border-border bg-surface-2/40 p-4">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Platform</p>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">Platform Retained</p>
               <p className="mt-1 text-2xl font-bold text-accent">
                 {formatBirr(totalPlatform, { compact: true })}
               </p>
             </div>
             <div className="rounded-md border border-border bg-surface-2/40 p-4">
-              <p className="text-[10px] uppercase tracking-wider text-text-muted">Creators</p>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">Creators Credited</p>
               <p className="mt-1 text-2xl font-bold text-success">
                 {formatBirr(totalCreator, { compact: true })}
               </p>
@@ -163,7 +245,7 @@ export function RevenueOverview() {
           </div>
         </Card>
         <DonutChartCard
-          title="Revenue by Method"
+          title="Revenue by Consumption Source"
           data={methodDonut}
           valueFormatter={(v) => formatBirr(v, { compact: true })}
           loading={loadingMethod || methodError}
@@ -172,21 +254,9 @@ export function RevenueOverview() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <BarChartCard
-          className="lg:col-span-1"
-          title="Top 5 Creators by Revenue"
-          data={top5}
-          xKey="name"
-          bars={[{ key: 'revenue', label: 'Gross Revenue', color: '#C8102E' }]}
-          horizontal
-          valueFormatter={(v) => formatBirr(v, { compact: true })}
-          loading={loadingCreators}
-          height={320}
-        />
-        <Card padding="none" className="overflow-hidden lg:col-span-2">
-          <CardHeader className="border-b border-border px-5 py-3">
-            <CardTitle>Recent Transactions</CardTitle>
+      <Card padding="none" className="overflow-hidden">
+          <CardHeader className="border-b border-border px-5 py-3 flex items-center justify-between">
+            <CardTitle>Recent Attribution Transactions</CardTitle>
             <Link to="/revenue/transactions">
               <Button
                 variant="ghost"
@@ -211,8 +281,8 @@ export function RevenueOverview() {
                   <TH>When</TH>
                   <TH>Source</TH>
                   <TH className="text-right">Gross</TH>
-                  <TH className="text-right">Creator</TH>
-                  <TH className="text-right">Platform</TH>
+                  <TH className="text-right">Creator Share</TH>
+                  <TH className="text-right">Platform Share</TH>
                 </TR>
               </THead>
               <TBody>
@@ -223,25 +293,35 @@ export function RevenueOverview() {
                     <EmptyState
                       icon={Receipt}
                       title="No transactions yet"
-                      description="Revenue transactions will appear here as users buy coins, passes, and subscriptions."
+                      description="Revenue transactions will appear here as users watch and unlock content."
                     />
                   </EmptyRow>
                 ) : (
-                  txs.slice(0, 10).map((t) => (
+                  txs.slice(0, 8).map((t) => (
                     <TR key={t.id}>
                       <TD className="text-xs text-text-secondary">
                         {formatDateTime(t.created_at)}
                       </TD>
-                      <TD className="capitalize text-text-secondary">
-                        {t.source_type ?? '—'}
+                      <TD>
+                        <Badge
+                          tone={
+                            t.source_type === 'unconsumed_pass' || t.source_type === 'unconsumed_subscription'
+                              ? 'warning'
+                              : t.source_type === 'ad_revenue'
+                                ? 'neutral'
+                                : 'accent'
+                          }
+                        >
+                          {t.source_type ? t.source_type.replace('_', ' ') : '—'}
+                        </Badge>
                       </TD>
-                      <TD className="text-right tabular-nums font-medium text-success">
+                      <TD className="text-right tabular-nums font-medium text-text-primary">
                         +{formatBirr(t.gross_amount_birr ?? 0)}
                       </TD>
-                      <TD className="text-right tabular-nums text-success">
+                      <TD className="text-right tabular-nums text-success font-medium">
                         {formatBirr(t.creator_share_birr ?? 0)}
                       </TD>
-                      <TD className="text-right tabular-nums text-accent">
+                      <TD className="text-right tabular-nums text-accent font-medium">
                         {formatBirr(t.platform_share_birr ?? 0)}
                       </TD>
                     </TR>
@@ -251,19 +331,81 @@ export function RevenueOverview() {
             </Table>
           )}
         </Card>
-      </div>
 
-      {creatorsError && (
-        <ErrorCard
-          message="Could not load creator revenue."
-          onRetry={() => qc.invalidateQueries({ queryKey: ['revenue-by-creator'] })}
-        />
-      )}
+      {/* Payout Status Audit Trails Section */}
+      <Card padding="none" className="overflow-hidden">
+        <CardHeader className="border-b border-border px-5 py-3 flex items-center justify-between">
+          <div>
+            <CardTitle>Payout Status Audit Trails</CardTitle>
+            <p className="text-xs text-text-muted mt-0.5">
+              Audit log of creator payouts, disbursement status, and authorized admins.
+            </p>
+          </div>
+        </CardHeader>
+        <Table>
+          <THead>
+            <TR>
+              <TH>Requested At</TH>
+              <TH>Creator</TH>
+              <TH className="text-right">Amount</TH>
+              <TH>Status</TH>
+              <TH>Reference</TH>
+              <TH>Processed By Admin</TH>
+              <TH>Notes</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {loadingPayouts ? (
+              <SkeletonRow colSpan={7} rows={4} />
+            ) : payoutsList.length === 0 ? (
+              <EmptyRow colSpan={7}>
+                <EmptyState
+                  icon={HandCoins}
+                  title="No payouts on record"
+                  description="Payout records and their status transitions will appear here."
+                />
+              </EmptyRow>
+            ) : (
+              payoutsList.map((p) => (
+                <TR key={p.id}>
+                  <TD className="text-xs text-text-secondary">
+                    {p.created_at ? formatDateTime(p.created_at) : '—'}
+                  </TD>
+                  <TD className="font-medium text-text-primary">
+                    {p.creator_name || `Creator #${p.creator_id}`}
+                  </TD>
+                  <TD className="text-right tabular-nums font-medium text-success">
+                    {formatBirr(p.amount_birr)}
+                  </TD>
+                  <TD>
+                    <Badge
+                      tone={
+                        p.status === 'processed'
+                          ? 'success'
+                          : p.status === 'pending'
+                            ? 'warning'
+                            : 'danger'
+                      }
+                    >
+                      {p.status}
+                    </Badge>
+                  </TD>
+                  <TD className="font-mono text-xs">{p.reference || '—'}</TD>
+                  <TD className="text-xs text-text-secondary">
+                    {p.processed_by_admin_id ? `Admin #${p.processed_by_admin_id}` : 'Pending'}
+                  </TD>
+                  <TD className="text-xs text-text-secondary">{p.notes || '—'}</TD>
+                </TR>
+              ))
+            )}
+          </TBody>
+        </Table>
+      </Card>
 
       <ConfirmDialog
         open={confirmExpired}
         title="Process Expired Passes?"
-        description="This will mark all expired passes as expired and settle any pending revenue. Run this once per day."
+        description="This will mark all expired passes as inactive and calculate time-based revenue consumption and unconsumed platform share."
         confirmLabel="Process"
         variant="warning"
         onConfirm={async () => {

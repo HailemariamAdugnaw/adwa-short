@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import get_current_admin
+from app.models.ad_unlock import AdUnlockLog
 from app.models.content import Episode, Series
 from app.models.engagement import ViewLog
 from app.models.revenue import (
@@ -360,7 +361,10 @@ async def creator_revenue_summary(
     ep_ids = [r[0] for r in ep_ids_res.all()]
     if ep_ids:
         views_res = await db.execute(
-            select(func.count(func.distinct(ViewLog.id))).where(ViewLog.episode_id.in_(ep_ids))
+            select(func.count(func.distinct(ViewLog.id))).where(
+                ViewLog.episode_id.in_(ep_ids),
+                ViewLog.watch_time_seconds >= 60,
+            )
         )
         total_views = int(views_res.scalar_one() or 0)
     else:
@@ -412,52 +416,140 @@ async def creator_content(
     series_res = await db.execute(
         select(Series).where(Series.creator_id == creator_id).order_by(desc(Series.created_at))
     )
-    out: List[CreatorContentItem] = []
-    for s in series_res.scalars().all():
-        eps_res = await db.execute(select(Episode).where(Episode.series_id == s.id))
-        eps = eps_res.scalars().all()
-        ep_ids = [e.id for e in eps]
-        if ep_ids:
-            views_res = await db.execute(
-                select(func.coalesce(func.sum(ViewLog.watch_time_seconds), 0)).where(
-                    ViewLog.episode_id.in_(ep_ids)
+    series_list = series_res.scalars().all()
+
+    # Get all episodes belonging to this creator or belonging to this creator's series
+    episodes_res = await db.execute(
+        select(Episode, Series)
+        .join(Series, Series.id == Episode.series_id)
+        .where((Episode.creator_id == creator_id) | (Series.creator_id == creator_id))
+        .order_by(Series.title, Episode.episode_number)
+    )
+    episodes_rows = episodes_res.all()
+    all_ep_ids = [ep.id for ep, _ in episodes_rows]
+
+    # Map views breakdown
+    views_map = {eid: {"coin": 0, "pass": 0, "sub": 0, "ad": 0, "total": 0} for eid in all_ep_ids}
+    if all_ep_ids:
+        views_res = await db.execute(
+            select(ViewLog).where(
+                ViewLog.episode_id.in_(all_ep_ids),
+                ViewLog.watch_time_seconds >= 60,
+            )
+        )
+        v_logs = views_res.scalars().all()
+        ad_unlocked_set = set()
+        user_ep_pairs = {(v.user_id, v.episode_id) for v in v_logs if v.user_id is not None}
+        if user_ep_pairs:
+            ad_res = await db.execute(
+                select(AdUnlockLog.user_id, AdUnlockLog.episode_id).where(
+                    AdUnlockLog.episode_id.in_(all_ep_ids)
                 )
             )
-            views = int(views_res.scalar_one() or 0)
-        else:
-            views = 0
+            for uid, eid in ad_res.all():
+                ad_unlocked_set.add((uid, eid))
+
+        for v in v_logs:
+            stats = views_map.get(v.episode_id)
+            if not stats:
+                continue
+            stats["total"] += 1
+            if v.subscription_id is not None:
+                stats["sub"] += 1
+            elif v.pass_purchase_id is not None:
+                stats["pass"] += 1
+            elif (v.user_id, v.episode_id) in ad_unlocked_set:
+                stats["ad"] += 1
+            else:
+                stats["coin"] += 1
+
+    # Map revenue breakdown from RevenueTransaction
+    rev_map = {eid: {"coins": 0.0, "pass": 0.0, "sub": 0.0, "total": 0.0} for eid in all_ep_ids}
+    series_rev_map = {s.id: {"coins": 0.0, "pass": 0.0, "sub": 0.0, "total": 0.0} for s in series_list}
+
+    tx_res = await db.execute(
+        select(RevenueTransaction).where(RevenueTransaction.creator_id == creator_id)
+    )
+    for tx in tx_res.scalars().all():
+        c_share = float(tx.creator_share_birr or 0.0)
+        if tx.episode_id and tx.episode_id in rev_map:
+            rev_stats = rev_map[tx.episode_id]
+            if tx.source_type == "coin_payment":
+                rev_stats["coins"] += c_share
+            elif tx.source_type == "pass_consumption":
+                rev_stats["pass"] += c_share
+            elif tx.source_type == "subscription_consumption":
+                rev_stats["sub"] += c_share
+            rev_stats["total"] += c_share
+
+        if tx.series_id and tx.series_id in series_rev_map:
+            s_stats = series_rev_map[tx.series_id]
+            if tx.source_type == "coin_payment":
+                s_stats["coins"] += c_share
+            elif tx.source_type == "pass_consumption":
+                s_stats["pass"] += c_share
+            elif tx.source_type == "subscription_consumption":
+                s_stats["sub"] += c_share
+            s_stats["total"] += c_share
+
+    out: List[CreatorContentItem] = []
+    # 1. Series rows (is_series=True)
+    for s in series_list:
+        s_eps = [ep for ep, s_ep in episodes_rows if s_ep.id == s.id]
+        s_views = {"coin": 0, "pass": 0, "sub": 0, "ad": 0, "total": 0}
+        for ep in s_eps:
+            ep_v = views_map.get(ep.id, {})
+            for k in s_views:
+                s_views[k] += ep_v.get(k, 0)
+        s_rev = series_rev_map.get(s.id, {"coins": 0.0, "pass": 0.0, "sub": 0.0, "total": 0.0})
         out.append(
             CreatorContentItem(
                 series_id=s.id,
                 episode_id=None,
                 title=s.title,
+                series_title=s.title,
+                episode_number=None,
                 is_series=True,
-                view_count=views,
-                episodes_count=len(eps),
+                episodes_count=len(s_eps),
+                total_views=s_views["total"],
+                coin_views=s_views["coin"],
+                pass_views=s_views["pass"],
+                subscription_views=s_views["sub"],
+                ad_views=s_views["ad"],
+                view_count=s_views["total"],
+                revenue_coins_birr=round(s_rev["coins"], 2),
+                revenue_pass_birr=round(s_rev["pass"], 2),
+                revenue_sub_birr=round(s_rev["sub"], 2),
+                total_revenue_birr=round(s_rev["total"], 2),
             )
         )
 
-    ep_res = await db.execute(
-        select(Episode, Series)
-        .join(Series, Series.id == Episode.series_id)
-        .where(Episode.creator_id == creator_id)
-    )
-    for ep, s in ep_res.all():
-        views_res = await db.execute(
-            select(func.coalesce(func.sum(ViewLog.watch_time_seconds), 0)).where(
-                ViewLog.episode_id == ep.id
-            )
-        )
-        views = int(views_res.scalar_one() or 0)
+    # 2. Episode rows (is_series=False)
+    for ep, s in episodes_rows:
+        ep_v = views_map.get(ep.id, {"coin": 0, "pass": 0, "sub": 0, "ad": 0, "total": 0})
+        ep_rev = rev_map.get(ep.id, {"coins": 0.0, "pass": 0.0, "sub": 0.0, "total": 0.0})
         out.append(
             CreatorContentItem(
                 series_id=s.id,
                 episode_id=ep.id,
-                title=f"{s.title} - {ep.title}",
+                title=ep.title,
+                series_title=s.title,
+                episode_number=ep.episode_number,
                 is_series=False,
-                view_count=views,
+                episodes_count=1,
+                total_views=ep_v["total"],
+                coin_views=ep_v["coin"],
+                pass_views=ep_v["pass"],
+                subscription_views=ep_v["sub"],
+                ad_views=ep_v["ad"],
+                view_count=ep_v["total"],
+                revenue_coins_birr=round(ep_rev["coins"], 2),
+                revenue_pass_birr=round(ep_rev["pass"], 2),
+                revenue_sub_birr=round(ep_rev["sub"], 2),
+                total_revenue_birr=round(ep_rev["total"], 2),
             )
         )
+
     return out
 
 

@@ -27,12 +27,10 @@ import { formatBirr, formatNumber } from '../../lib/format'
 const INFO_ITEMS = [
   'Users purchase coin packages using Birr (local currency) via Telebirr or wallet deposit.',
   'Each package has a fixed coin amount and price in Birr.',
-  '"Episodes Unlocked" indicates how many episodes the user can unlock with this package\'s coins.',
   'The coin-to-Birr conversion rate is set in Settings (e.g., 1 coin = 1 Birr).',
   'When a user spends coins to unlock an episode, the revenue is split between the platform and the content creator based on the creator\'s revenue split percentage.',
   'Coins do not expire — once purchased, they remain in the user\'s wallet until spent.',
-  'Admins can create multiple packages at different price points to give users options.',
-  'Example: 50 coins for 50 Birr unlocks 5 episodes; 300 coins for 100 Birr unlocks 15 episodes (bulk discount).',
+  'Admins can create multiple packages at different price points to give users options (e.g. bulk discounts).',
 ]
 
 export function CoinPackages() {
@@ -81,7 +79,6 @@ export function CoinPackages() {
               <TH>Name</TH>
               <TH className="text-right">Coins</TH>
               <TH className="text-right">Price (Birr)</TH>
-              <TH className="text-right">Eps unlocked</TH>
               <TH>Status</TH>
               <TH className="text-right">Sort</TH>
               <TH className="text-right">Actions</TH>
@@ -89,9 +86,9 @@ export function CoinPackages() {
           </THead>
           <TBody>
             {isLoading ? (
-              <SkeletonRow colSpan={7} rows={4} />
+              <SkeletonRow colSpan={6} rows={4} />
             ) : (packages?.length ?? 0) === 0 ? (
-              <EmptyRow colSpan={7}>
+              <EmptyRow colSpan={6}>
                 <EmptyState
                   icon={Coins}
                   title="No coin packages yet"
@@ -111,7 +108,6 @@ export function CoinPackages() {
                   </TD>
                   <TD className="text-right tabular-nums">{formatNumber(p.coins)}</TD>
                   <TD className="text-right tabular-nums font-medium">{formatBirr(p.price_birr)}</TD>
-                  <TD className="text-right tabular-nums">{p.episodes_unlocked}</TD>
                   <TD>
                     {p.is_active ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Inactive</Badge>}
                   </TD>

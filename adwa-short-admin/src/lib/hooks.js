@@ -60,6 +60,20 @@ export function useContentPerformance() {
   })
 }
 
+export function useContentEpisodesPerformance(seriesId) {
+  return useQuery({
+    queryKey: ['analytics', 'content', 'episodes', seriesId],
+    queryFn: () => get('/admin/analytics/content/episodes', seriesId ? { series_id: seriesId } : undefined),
+  })
+}
+
+export function useAdminPayouts(params) {
+  return useQuery({
+    queryKey: ['admin', 'revenue', 'payouts', params],
+    queryFn: () => get('/admin/revenue/payouts', params),
+  })
+}
+
 export function useCategories() {
   return useQuery({
     queryKey: ['categories'],
@@ -195,7 +209,7 @@ export function useUsers(params) {
 export function useUser(id) {
   return useQuery({
     queryKey: ['users', id],
-    queryFn: () => get(`/users/${id}`),
+    queryFn: () => get(`/admin/users/${id}`),
     enabled: !!id,
   })
 }

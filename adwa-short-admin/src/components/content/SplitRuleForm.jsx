@@ -109,16 +109,40 @@ export function SplitRuleForm({ creatorId, series = [], episodes = [], initial, 
         </Select>
       )}
 
-      <Input
-        label="Creator Share (%)"
-        type="number"
-        min={0}
-        max={100}
-        value={form.creator_share_pct}
-        onChange={(e) => setForm((f) => ({ ...f, creator_share_pct: Number(e.target.value) }))}
-        hint="Platform share = 100 − creator share"
-        required
-      />
+      <div>
+        <Input
+          label="Creator Share (%)"
+          type="number"
+          min={0}
+          max={100}
+          value={form.creator_share_pct}
+          onChange={(e) => setForm((f) => ({ ...f, creator_share_pct: Number(e.target.value) }))}
+          hint={`Creator: ${form.creator_share_pct}% · Platform: ${100 - (Number(form.creator_share_pct) || 0)}%`}
+          required
+        />
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="text-[11px] text-text-muted">Presets:</span>
+          {[
+            { label: '50/50', pct: 50 },
+            { label: '60/40', pct: 60 },
+            { label: '70/30', pct: 70 },
+            { label: '80/20', pct: 80 },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, creator_share_pct: preset.pct }))}
+              className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+                Number(form.creator_share_pct) === preset.pct
+                  ? 'border-accent bg-accent/10 text-accent font-semibold'
+                  : 'border-border bg-surface-2 text-text-secondary hover:border-border-strong'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <Input
         label="Label (optional)"

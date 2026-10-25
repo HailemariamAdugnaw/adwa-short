@@ -87,6 +87,12 @@ async def test_manual_deposit(client, admin_headers, demo_user):
     assert res.status_code == 201
     assert res.json()["amount_birr"] == 200.0
 
+    list_res = await client.get("/admin/wallet/manual-deposits", headers=admin_headers)
+    assert list_res.status_code == 200
+    dep = list_res.json()[0]
+    assert dep["user_phone"] == u.phone
+    assert dep["user_display_name"] == u.display_name
+
     bal = await client.post(
         "/auth/login",
         json={"phone": u.phone, "password": "user123"},
