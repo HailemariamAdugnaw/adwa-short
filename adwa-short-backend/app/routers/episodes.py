@@ -10,6 +10,7 @@ from app.models.content import Episode, Series
 from app.models.user import User
 from app.schemas.content import EpisodeCreate, EpisodeOut, EpisodeUpdate
 from app.services.monetization import AccessDenied, resolve_access
+from app.services.audit import log_activity
 
 router = APIRouter(prefix="/episodes", tags=["episodes"])
 
@@ -77,7 +78,7 @@ async def check_access(
 async def create_episode(
     payload: EpisodeCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ):
     sres = await db.execute(select(Series).where(Series.id == payload.series_id))
     if sres.scalar_one_or_none() is None:
@@ -85,6 +86,15 @@ async def create_episode(
     data = payload.model_dump()
     ep = Episode(**data)
     db.add(ep)
+    await db.flush()
+    await log_activity(
+        db,
+        admin,
+        "create",
+        "episode",
+        ep.id,
+        f"Created episode #{ep.episode_number} '{ep.title}' in series ID {ep.series_id}",
+    )
     await db.commit()
     await db.refresh(ep)
     return ep
@@ -95,7 +105,7 @@ async def update_episode(
     episode_id: int,
     payload: EpisodeUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ):
     res = await db.execute(select(Episode).where(Episode.id == episode_id))
     ep = res.scalar_one_or_none()
@@ -103,6 +113,14 @@ async def update_episode(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(ep, k, v)
+    await log_activity(
+        db,
+        admin,
+        "update",
+        "episode",
+        ep.id,
+        f"Updated episode #{ep.episode_number} '{ep.title}'",
+    )
     await db.commit()
     await db.refresh(ep)
     return ep
@@ -112,13 +130,23 @@ async def update_episode(
 async def delete_episode(
     episode_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ):
     res = await db.execute(select(Episode).where(Episode.id == episode_id))
     ep = res.scalar_one_or_none()
     if ep is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    ep_title = ep.title
+    ep_num = ep.episode_number
     await db.delete(ep)
+    await log_activity(
+        db,
+        admin,
+        "delete",
+        "episode",
+        episode_id,
+        f"Deleted episode #{ep_num} '{ep_title}'",
+    )
     await db.commit()
 
 

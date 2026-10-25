@@ -14,9 +14,11 @@ class AdminUser(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
-    role_label: Mapped[str] = mapped_column(String(64), default="admin", nullable=False)
+    role_label: Mapped[str] = mapped_column(String(64), default="staff", nullable=False)
     permissions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="admin_profile", lazy="selectin")
 
 
 class ManualCashDeposit(Base):
@@ -51,3 +53,5 @@ class AuditLog(Base):
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    admin: Mapped[Optional["User"]] = relationship("User", foreign_keys=[admin_id], lazy="selectin")

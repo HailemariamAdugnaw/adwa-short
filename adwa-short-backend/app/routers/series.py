@@ -12,6 +12,7 @@ from app.deps import get_current_admin, get_optional_user
 from app.models.content import Episode, Series
 from app.models.user import User
 from app.schemas.content import SeriesCreate, SeriesDetailOut, SeriesOut, SeriesUpdate
+from app.services.audit import log_activity
 
 router = APIRouter(prefix="/series", tags=["series"])
 
@@ -84,10 +85,12 @@ async def get_series(
 async def create_series(
     payload: SeriesCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ):
     series = Series(**payload.model_dump())
     db.add(series)
+    await db.flush()
+    await log_activity(db, admin, "create", "series", series.id, f"Created series '{series.title}'")
     await db.commit()
     await db.refresh(series)
     return series
@@ -98,7 +101,7 @@ async def update_series(
     series_id: int,
     payload: SeriesUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ):
     res = await db.execute(select(Series).where(Series.id == series_id))
     series = res.scalar_one_or_none()
@@ -106,6 +109,7 @@ async def update_series(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(series, k, v)
+    await log_activity(db, admin, "update", "series", series.id, f"Updated series '{series.title}'")
     await db.commit()
     await db.refresh(series)
     return series
@@ -115,11 +119,13 @@ async def update_series(
 async def delete_series(
     series_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ):
     res = await db.execute(select(Series).where(Series.id == series_id))
     series = res.scalar_one_or_none()
     if series is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+    series_title = series.title
     await db.delete(series)
+    await log_activity(db, admin, "delete", "series", series_id, f"Deleted series '{series_title}'")
     await db.commit()

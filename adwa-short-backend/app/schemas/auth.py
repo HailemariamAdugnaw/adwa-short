@@ -13,7 +13,10 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    username: Optional[str] = None
+    identifier: Optional[str] = None
     password: str
 
 
@@ -23,6 +26,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: int
     role: str
+    admin_role: Optional[str] = None
+    display_name: Optional[str] = None
+    email: Optional[str] = None
     is_paid_tier: bool = False
     device_limit_enforced: bool = False
 

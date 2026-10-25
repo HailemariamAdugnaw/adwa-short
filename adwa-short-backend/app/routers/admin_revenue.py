@@ -8,7 +8,7 @@ from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_admin
+from app.deps import get_current_super_admin
 from app.models.content import Episode, Series
 from app.models.revenue import Creator, Payout, RevenueTransaction
 from app.models.user import User
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/admin/revenue", tags=["admin-revenue"])
 @router.get("/overview", response_model=RevenueOverview)
 async def revenue_overview(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     gross_res = await db.execute(
         select(func.coalesce(func.sum(RevenueTransaction.gross_amount_birr), 0))
@@ -88,7 +88,7 @@ async def revenue_overview(
 @router.get("/by-creator", response_model=List[RevenueByCreatorRow])
 async def revenue_by_creator(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(
         select(
@@ -134,7 +134,7 @@ async def revenue_by_content(
     series_id: Optional[int] = Query(default=None),
     limit: int = Query(default=100, le=500),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     stmt = (
         select(
@@ -237,7 +237,7 @@ async def revenue_by_content(
 @router.get("/by-method", response_model=List[RevenueByMethodRow])
 async def revenue_by_method(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(
         select(
@@ -273,7 +273,7 @@ async def list_transactions(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     stmt = select(RevenueTransaction)
     if creator_id is not None:
@@ -292,7 +292,7 @@ async def list_transactions(
 @router.post("/process-expired", response_model=ProcessExpiredResult)
 async def process_expired(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     result = await check_expired_passes(db)
     await db.commit()
@@ -305,7 +305,7 @@ async def list_all_payouts(
     status_filter: Optional[str] = None,
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     stmt = (
         select(Payout, Creator.name.label("creator_name"))

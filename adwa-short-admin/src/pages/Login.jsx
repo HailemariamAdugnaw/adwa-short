@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { Clapperboard, Phone, Lock, ArrowRight, Loader2 } from 'lucide-react'
+import { Clapperboard, Lock, ArrowRight, Loader2, User } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { errMsg } from '../lib/api'
 import { Button } from '../components/ui/Button'
@@ -14,7 +14,7 @@ export function Login() {
   const location = useLocation()
   const login = useAuthStore((s) => s.login)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const [phone, setPhone] = useState('+251900000000')
+  const [identifier, setIdentifier] = useState('admin@adwashort.com')
   const [password, setPassword] = useState('')
 
   const from = location.state?.from?.pathname ?? '/'
@@ -36,7 +36,12 @@ export function Login() {
     onSuccess: (data) => {
       login(data)
       toast.success('Welcome back')
-      navigate(from, { replace: true })
+      const role = data.admin_role || (data.role === 'admin' ? 'super_admin' : data.role)
+      if (role === 'staff') {
+        navigate('/content/series', { replace: true })
+      } else {
+        navigate(from === '/login' ? '/' : from, { replace: true })
+      }
     },
     onError: (err) => toast.error(errMsg(err, 'Login failed. Check credentials.')),
   })
@@ -45,8 +50,12 @@ export function Login() {
 
   const onSubmit = (e) => {
     e.preventDefault()
-    if (!phone.trim() || !password) return toast.error('Phone and password required')
-    mutation.mutate({ phone: phone.trim(), password })
+    if (!identifier.trim() || !password) return toast.error('Email, username, or phone and password required')
+    mutation.mutate({
+      identifier: identifier.trim(),
+      phone: identifier.trim(),
+      password,
+    })
   }
 
   return (
@@ -78,11 +87,11 @@ export function Login() {
 
           <form onSubmit={onSubmit} className="space-y-4">
             <Input
-              label="Phone Number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+251900000000"
-              leftIcon={<Phone className="h-4 w-4" />}
+              label="Email, Username, or Phone"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="admin@adwashort.com"
+              leftIcon={<User className="h-4 w-4" />}
               autoComplete="username"
               required
             />

@@ -210,6 +210,22 @@ async def seed() -> None:
             db.add(AdminUser(user_id=admin.id, role_label="super_admin", permissions="*"))
             db.add(Wallet(user_id=admin.id, balance_birr=0, balance_coins=0))
 
+        res_staff = await db.execute(select(User).where(User.email == "staff@adwashort.com"))
+        staff = res_staff.scalar_one_or_none()
+        if staff is None:
+            staff = User(
+                phone="+251922222222",
+                email="staff@adwashort.com",
+                password_hash=hash_password("staff123"),
+                display_name="Content Staff",
+                role="admin",
+                is_active=True,
+            )
+            db.add(staff)
+            await db.flush()
+            db.add(AdminUser(user_id=staff.id, role_label="staff", permissions="content"))
+            db.add(Wallet(user_id=staff.id, balance_birr=0, balance_coins=0))
+
         res = await db.execute(select(User).where(User.phone == "+251911111111"))
         demo = res.scalar_one_or_none()
         if demo is None:

@@ -51,12 +51,17 @@ export function UsersList() {
     onError: (err) => toast.error(errMsg(err, 'Failed to update user')),
   })
 
+  const rawUsers = Array.isArray(data) ? data : []
+  const regularUsers = rawUsers.filter(
+    (u) => !['admin', 'super_admin', 'staff'].includes(u.role) && !u.admin_role,
+  )
+
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-text-primary">Users</h2>
+        <h2 className="text-xl font-bold text-text-primary">End Users &amp; Viewers</h2>
         <p className="text-sm text-text-secondary">
-          Search, inspect, and manage user accounts · {(Array.isArray(data) ? data : []).length} total
+          Inspect and manage regular viewer accounts · {regularUsers.length} total
         </p>
       </div>
 
@@ -89,7 +94,7 @@ export function UsersList() {
           <TBody>
             {isLoading ? (
               <SkeletonRow colSpan={7} rows={6} />
-            ) : (Array.isArray(data) ? data : []).length === 0 ? (
+            ) : regularUsers.length === 0 ? (
               <EmptyRow colSpan={7}>
                 <EmptyState
                   icon={UsersIcon}
@@ -98,7 +103,7 @@ export function UsersList() {
                 />
               </EmptyRow>
             ) : (
-              (Array.isArray(data) ? data : []).map((u) => (
+              regularUsers.map((u) => (
                 <TR key={u.id} className="cursor-pointer" onClick={() => navigate(`/users/${u.id}`)}>
                   <TD>
                     <div className="flex items-center gap-3">

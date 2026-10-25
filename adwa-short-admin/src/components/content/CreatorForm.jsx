@@ -8,6 +8,7 @@ import { Select } from '../ui/Select'
 import { FileDropzone } from '../ui/FileDropzone'
 import { Card } from '../ui/Card'
 import { upload, post, put, errMsg } from '../../lib/api'
+import { useAuthStore } from '../../lib/store'
 
 const PAYMENT_METHODS = [
   { value: 'bank', label: 'Bank Transfer' },
@@ -19,6 +20,9 @@ const PAYMENT_METHODS = [
 
 export function CreatorForm({ initial, onSaved, onCancel }) {
   const qc = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const adminRole = user?.admin_role || (user?.role === 'admin' ? 'super_admin' : user?.role)
+  const isSuperAdmin = adminRole === 'super_admin'
   const isEdit = !!initial
 
   const [form, setForm] = useState({
@@ -64,8 +68,12 @@ export function CreatorForm({ initial, onSaved, onCancel }) {
 
   const mutation = useMutation({
     mutationFn: async (payload) => {
-      if (isEdit && initial) return put(`/creators/${initial.id}`, payload)
-      return post('/creators', payload)
+      const body = { ...payload }
+      if (!isSuperAdmin) {
+        delete body.default_revenue_split_pct
+      }
+      if (isEdit && initial) return put(`/creators/${initial.id}`, body)
+      return post('/creators', body)
     },
     onSuccess: (saved) => {
       toast.success(isEdit ? 'Split updated' : 'Creator created')
@@ -231,17 +239,27 @@ export function CreatorForm({ initial, onSaved, onCancel }) {
             value={form.contract_signed_date}
             onChange={(e) => setForm((f) => ({ ...f, contract_signed_date: e.target.value }))}
           />
-          <Input
-            label="Default Revenue Split (%)"
-            type="number"
-            min={0}
-            max={100}
-            value={form.default_revenue_split_pct}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, default_revenue_split_pct: Number(e.target.value) }))
-            }
-            hint="Creator's default share of revenue (0–100). Platform gets the remainder."
-          />
+          {isSuperAdmin ? (
+            <Input
+              label="Default Revenue Split (%)"
+              type="number"
+              min={0}
+              max={100}
+              value={form.default_revenue_split_pct}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, default_revenue_split_pct: Number(e.target.value) }))
+              }
+              hint="Creator's default share of revenue (0–100). Platform gets the remainder."
+            />
+          ) : (
+            <div className="flex flex-col justify-center rounded-md border border-border bg-surface-2/40 px-3 py-2 text-xs">
+              <span className="text-text-secondary font-medium">Default Revenue Split</span>
+              <span className="mt-1 font-semibold text-text-primary">
+                {form.default_revenue_split_pct}% Creator / {100 - form.default_revenue_split_pct}% Platform
+              </span>
+              <span className="mt-0.5 text-[10px] text-text-muted">Managed exclusively by Super Admin</span>
+            </div>
+          )}
           <div className="md:col-span-2">
             <FileDropzone
               label="Contract Document (PDF)"

@@ -10,8 +10,21 @@ export const useAuthStore = create(
       isAuthenticated: false,
       setUser: (user) => set({ user }),
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken, isAuthenticated: true }),
-      login: ({ user, access_token, refresh_token }) =>
-        set({ user, accessToken: access_token, refreshToken: refresh_token, isAuthenticated: true }),
+      login: (data) => {
+        const u = data.user || {
+          id: data.user_id,
+          role: data.role,
+          admin_role: data.admin_role || (data.role === 'admin' ? 'super_admin' : data.role),
+          display_name: data.display_name,
+          email: data.email,
+        }
+        set({
+          user: u,
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          isAuthenticated: true,
+        })
+      },
       logout: () =>
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
     }),

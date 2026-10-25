@@ -15,6 +15,7 @@ from app.routers import (
     admin_analytics,
     admin_content,
     admin_revenue,
+    admin_staff,
     admin_users,
     admin_wallet,
     auth,
@@ -106,6 +107,7 @@ for r in (
     admin_wallet.router,
     admin_analytics.router,
     admin_revenue.router,
+    admin_staff.router,
 ):
     app.include_router(r)
 

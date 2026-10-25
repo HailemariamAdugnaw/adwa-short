@@ -16,6 +16,7 @@ import {
   Phone,
 } from 'lucide-react'
 import { useUser, useUserWallet, useUserDevices } from '../../lib/hooks'
+import { useAuthStore } from '../../lib/store'
 import { post, errMsg } from '../../lib/api'
 import { Card, CardHeader, CardTitle, CardSection } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -49,6 +50,10 @@ const deviceIcon = (type) => {
 export function UserDetail() {
   const { id } = useParams()
   const qc = useQueryClient()
+  const authUser = useAuthStore((s) => s.user)
+  const adminRole = authUser?.admin_role || (authUser?.role === 'admin' ? 'super_admin' : authUser?.role)
+  const isSuperAdmin = adminRole === 'super_admin'
+
   const { data: user, isLoading } = useUser(id)
   const { data: wallet } = useUserWallet(id)
   const { data: devices } = useUserDevices(id)
@@ -139,13 +144,15 @@ export function UserDetail() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              leftIcon={<HandCoins className="h-4 w-4" />}
-              onClick={() => setDepositOpen(true)}
-            >
-              Manual Top-Up
-            </Button>
+            {isSuperAdmin && (
+              <Button
+                variant="secondary"
+                leftIcon={<HandCoins className="h-4 w-4" />}
+                onClick={() => setDepositOpen(true)}
+              >
+                Manual Top-Up
+              </Button>
+            )}
             <Button
               variant={user.is_banned ? 'success' : 'danger'}
               leftIcon={user.is_banned ? <CheckCircle2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
@@ -164,9 +171,11 @@ export function UserDetail() {
               <Wallet className="h-4 w-4 text-accent" />
               <CardTitle>Wallet</CardTitle>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => setDepositOpen(true)}>
-              Top-Up
-            </Button>
+            {isSuperAdmin && (
+              <Button size="sm" variant="ghost" onClick={() => setDepositOpen(true)}>
+                Top-Up
+              </Button>
+            )}
           </CardHeader>
           <CardSection>
             <div className="grid grid-cols-2 gap-3">

@@ -20,6 +20,7 @@ class UserOut(BaseModel):
     created_at: datetime
     balance_birr: float = 0.0
     balance_coins: int = 0
+    admin_role: Optional[str] = None
 
 
 class UserUpdate(BaseModel):

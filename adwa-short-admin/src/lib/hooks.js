@@ -23,6 +23,13 @@ import {
   processExpiredPasses,
   getReviews,
   deleteReview,
+  getStaff,
+  getStaffMember,
+  createStaff,
+  updateStaff,
+  toggleStaffActive,
+  deleteStaff,
+  getStaffActivity,
   errMsg,
 } from './api'
 import { useAuthStore } from './store'
@@ -302,11 +309,12 @@ export function useSetCreatorSplit() {
   })
 }
 
-export function useCreatorRevenue(id) {
+export function useCreatorRevenue(id, options = {}) {
   return useQuery({
     queryKey: ['creators', id, 'revenue'],
     queryFn: () => getCreatorRevenue(id),
-    enabled: !!id,
+    enabled: !!id && (options.enabled !== false),
+    ...options,
   })
 }
 
@@ -336,14 +344,15 @@ export function useProcessPayout() {
   })
 }
 
-export function useCreatorPayouts(id) {
+export function useCreatorPayouts(id, options = {}) {
   return useQuery({
     queryKey: ['creators', id, 'payouts'],
     queryFn: async () => {
       const data = await getCreatorPayouts(id)
       return Array.isArray(data) ? data : []
     },
-    enabled: !!id,
+    enabled: !!id && (options.enabled !== false),
+    ...options,
   })
 }
 
@@ -432,5 +441,31 @@ export function useDeleteReview() {
       qc.invalidateQueries({ queryKey: ['reviews'] })
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to delete review')),
+  })
+}
+
+export function useStaffList() {
+  return useQuery({
+    queryKey: ['admin', 'staff'],
+    queryFn: async () => {
+      const data = await getStaff()
+      return Array.isArray(data) ? data : []
+    },
+  })
+}
+
+export function useStaffMember(id) {
+  return useQuery({
+    queryKey: ['admin', 'staff', id],
+    queryFn: () => getStaffMember(id),
+    enabled: !!id,
+  })
+}
+
+export function useStaffActivity(params) {
+  return useQuery({
+    queryKey: ['admin', 'staff', 'activity', params],
+    queryFn: () => getStaffActivity(params),
+    placeholderData: (prev) => prev,
   })
 }

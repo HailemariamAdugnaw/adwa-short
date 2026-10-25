@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc
 
 from app.database import get_db
-from app.deps import get_current_admin
+from app.deps import get_current_admin, get_current_super_admin
 from app.models.ad_unlock import AdUnlockLog
 from app.models.admin import ManualCashDeposit
 from app.models.content import Episode, Series
@@ -76,7 +76,7 @@ async def _categorize_views(
 
 
 @router.get("/overview", response_model=AnalyticsOverview)
-async def overview(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)):
+async def overview(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_super_admin)):
     total_users = int((await db.execute(select(func.count(User.id)).where(User.role == "user"))).scalar_one())
     total_series = int((await db.execute(select(func.count(Series.id)))).scalar_one())
     total_episodes = int((await db.execute(select(func.count(Episode.id)).where(Episode.is_short.is_(False)))).scalar_one())
@@ -139,14 +139,23 @@ async def overview(db: AsyncSession = Depends(get_db), _: User = Depends(get_cur
 
 @router.get("/content", response_model=AnalyticsContent)
 async def content_performance(
-    limit: int = Query(default=20, le=100),
+    series_id: Optional[int] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, le=500),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
-    rows = []
-    res = await db.execute(select(Series).order_by(Series.popular_score.desc()).limit(limit))
+    stmt = select(Series)
+    if series_id is not None:
+        stmt = stmt.where(Series.id == series_id)
+    if q:
+        stmt = stmt.where(Series.title.ilike(f"%{q}%"))
+    stmt = stmt.order_by(Series.popular_score.desc()).limit(limit)
+    res = await db.execute(stmt)
     series_list = res.scalars().all()
     series_free_map = {s.id: s.free_episode_count for s in series_list}
+
+    rows = []
 
     for s in series_list:
         ep_res = await db.execute(select(Episode).where(Episode.series_id == s.id))
@@ -209,9 +218,9 @@ async def content_performance(
 @router.get("/content/episodes", response_model=List[EpisodeContentRow])
 async def content_episodes_performance(
     series_id: Optional[int] = None,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=100, le=500),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     query = select(Episode, Series).join(Series, Series.id == Episode.series_id)
     if series_id is not None:

@@ -8,8 +8,10 @@ import {
   ChevronDown,
   User as UserIcon,
   Settings as SettingsIcon,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAuthStore } from '../../lib/store'
+import { isSuperAdmin as checkSuperAdmin } from '../../lib/rbac'
 import { initials } from '../../lib/format'
 import { cn } from '../../lib/cn'
 
@@ -26,6 +28,8 @@ const PAGE_TITLES = {
   '/users': 'Users',
   '/walkin/manual-deposit': 'Walk-in Center · Manual Deposit',
   '/analytics/content': 'Analytics · Content',
+  '/staff': 'Administration · Staff Management',
+  '/staff/activity': 'Administration · Staff Activity Log',
   '/settings': 'Settings',
 }
 
@@ -34,6 +38,9 @@ export function Topbar({ onMenu }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const isSuperAdmin = checkSuperAdmin(user)
+  const displayName = user?.display_name || user?.name || (isSuperAdmin ? 'Super Admin' : 'Staff Member')
 
   const matched = Object.entries(PAGE_TITLES).find(([path]) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path),
@@ -87,11 +94,11 @@ export function Topbar({ onMenu }) {
           className="flex items-center gap-2 rounded-md border border-border bg-surface-2 py-1 pl-1 pr-2 hover:bg-surface-3 transition-colors"
         >
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
-            {initials(user?.name, user?.phone)}
+            {initials(displayName, user?.phone || user?.email)}
           </div>
           <div className="hidden text-left leading-tight sm:block">
-            <p className="text-xs font-semibold text-text-primary">{user?.name ?? 'Admin'}</p>
-            <p className="text-[10px] uppercase tracking-wider text-text-muted">{user?.role ?? 'admin'}</p>
+            <p className="text-xs font-semibold text-text-primary">{displayName}</p>
+            <p className="text-[10px] uppercase tracking-wider text-text-muted">{isSuperAdmin ? 'Super Admin' : 'Staff'}</p>
           </div>
           <ChevronDown className={cn('h-4 w-4 text-text-muted transition-transform', menuOpen && 'rotate-180')} />
         </button>
@@ -99,22 +106,36 @@ export function Topbar({ onMenu }) {
         {menuOpen && (
           <div className="absolute right-0 top-12 w-56 card-surface overflow-hidden p-1 shadow-2xl animate-fade-in">
             <div className="border-b border-border px-3 py-2">
-              <p className="text-xs font-semibold text-text-primary">{user?.name}</p>
-              <p className="truncate text-[11px] text-text-secondary">{user?.phone}</p>
+              <p className="text-xs font-semibold text-text-primary">{displayName}</p>
+              <p className="truncate text-[11px] text-text-secondary">{user?.email || user?.phone}</p>
+              <span className="mt-1 inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent">
+                {isSuperAdmin ? 'Super Admin' : 'Staff Member'}
+              </span>
             </div>
+            {isSuperAdmin && (
+              <button
+                onMouseDown={() => navigate('/staff')}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+              >
+                <ShieldCheck className="h-4 w-4 text-accent" />
+                Staff Management
+              </button>
+            )}
+            {isSuperAdmin && (
+              <button
+                onMouseDown={() => navigate('/settings')}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+              >
+                <SettingsIcon className="h-4 w-4" />
+                Settings
+              </button>
+            )}
             <button
-              onMouseDown={() => navigate('/settings')}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-2 hover:text-text-primary"
-            >
-              <SettingsIcon className="h-4 w-4" />
-              Settings
-            </button>
-            <button
-              onMouseDown={() => navigate('/users')}
+              onMouseDown={() => navigate('/content/series')}
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-2 hover:text-text-primary"
             >
               <UserIcon className="h-4 w-4" />
-              My Profile
+              Content Console
             </button>
             <div className="my-1 border-t border-border" />
             <button

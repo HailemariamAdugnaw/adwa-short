@@ -58,7 +58,7 @@ async def publish_series(
     # Ownership Binding: Enforce that every published series is explicitly bound to a unique creator
     s.creator_id = await _ensure_creator_binding(db, s.creator_id)
     s.is_published = True
-    await _log(db, admin, "publish", "series", s.id)
+    await _log(db, admin, "publish", "series", s.id, f"Published series '{s.title}'")
     await db.commit()
     await db.refresh(s)
     return s
@@ -75,7 +75,7 @@ async def unpublish_series(
     if s is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
     s.is_published = False
-    await _log(db, admin, "unpublish", "series", s.id)
+    await _log(db, admin, "unpublish", "series", s.id, f"Unpublished series '{s.title}'")
     await db.commit()
     await db.refresh(s)
     return s
@@ -102,7 +102,7 @@ async def publish_episode(
     ep.is_published = True
     if ep.published_at is None:
         ep.published_at = datetime.utcnow()
-    await _log(db, admin, "publish", "episode", ep.id)
+    await _log(db, admin, "publish", "episode", ep.id, f"Published episode '{ep.title}'")
     await db.commit()
     await db.refresh(ep)
     return ep
@@ -119,7 +119,7 @@ async def unpublish_episode(
     if ep is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
     ep.is_published = False
-    await _log(db, admin, "unpublish", "episode", ep.id)
+    await _log(db, admin, "unpublish", "episode", ep.id, f"Unpublished episode '{ep.title}'")
     await db.commit()
     await db.refresh(ep)
     return ep

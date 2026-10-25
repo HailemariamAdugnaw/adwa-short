@@ -156,6 +156,14 @@ export const processExpiredPasses = () => api.post('/admin/revenue/process-expir
 export const getReviews = (params) => api.get('/reviews/admin', { params }).then((r) => r.data)
 export const deleteReview = (id) => api.delete(`/reviews/admin/${id}`).then((r) => r.data)
 
+export const getStaff = () => api.get('/admin/staff').then((r) => r.data)
+export const getStaffMember = (id) => api.get(`/admin/staff/${id}`).then((r) => r.data)
+export const createStaff = (payload) => api.post('/admin/staff', payload).then((r) => r.data)
+export const updateStaff = (id, payload) => api.put(`/admin/staff/${id}`, payload).then((r) => r.data)
+export const toggleStaffActive = (id) => api.post(`/admin/staff/${id}/toggle-active`).then((r) => r.data)
+export const deleteStaff = (id) => api.delete(`/admin/staff/${id}`).then((r) => r.data)
+export const getStaffActivity = (params) => api.get('/admin/staff/activity', { params }).then((r) => r.data)
+
 export function errMsg(err, fallback = 'Something went wrong') {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data

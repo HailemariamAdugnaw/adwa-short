@@ -22,6 +22,7 @@ os.environ.setdefault("MAX_DEVICES_PER_ACCOUNT", "2")
 from app.database import Base, AsyncSessionLocal, engine, get_db
 import app.models
 from app.main import app
+from app.models.admin import AdminUser
 from app.models.user import User
 from app.models.wallet import Wallet
 from app.security import hash_password
@@ -86,6 +87,10 @@ async def _create_user(
         s.add(u)
         await s.flush()
         s.add(Wallet(user_id=u.id, balance_birr=balance_birr, balance_coins=balance_coins))
+        if role in ("admin", "super_admin"):
+            s.add(AdminUser(user_id=u.id, role_label="super_admin", permissions="*"))
+        elif role == "staff":
+            s.add(AdminUser(user_id=u.id, role_label="staff", permissions="content"))
         await s.commit()
         await s.refresh(u)
         return u, password
@@ -99,6 +104,24 @@ async def demo_user():
 @pytest_asyncio.fixture
 async def admin_user():
     return await _create_user("+251900000000", "admin123", "admin")
+
+
+@pytest_asyncio.fixture
+async def staff_user():
+    return await _create_user("+251922222222", "staff123", "staff")
+
+
+@pytest_asyncio.fixture
+async def staff_headers(client: AsyncClient, staff_user) -> dict:
+    u, pwd = staff_user
+    res = await client.post(
+        "/auth/login",
+        json={"phone": u.phone, "password": pwd},
+        headers={"X-Device-Id": "device-staff-1", "X-Platform": "android"},
+    )
+    assert res.status_code == 200, res.text
+    token = res.json()["access_token"]
+    return {"Authorization": f"Bearer {token}", "X-Device-Id": "device-staff-1"}
 
 
 @pytest_asyncio.fixture

@@ -18,12 +18,18 @@ import {
   TrendingUp,
   Receipt,
   MessageSquare,
+  ShieldCheck,
+  History,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { useAuthStore } from '../../lib/store'
+import { isSuperAdmin as checkSuperAdmin } from '../../lib/rbac'
+import { Badge } from '../ui/Badge'
 
 const NAV = [
   {
     label: 'Dashboard',
+    superAdminOnly: true,
     items: [{ to: '/', label: 'Overview', icon: LayoutDashboard, end: true }],
   },
   {
@@ -36,10 +42,12 @@ const NAV = [
   },
   {
     label: 'Creators',
+    superAdminOnly: true,
     items: [{ to: '/creators', label: 'Creators List', icon: UserCircle }],
   },
   {
     label: 'Monetization',
+    superAdminOnly: true,
     items: [
       { to: '/monetization/coins', label: 'Coin Packages', icon: Coins },
       { to: '/monetization/passes', label: 'Time Passes', icon: Clock },
@@ -50,6 +58,7 @@ const NAV = [
   },
   {
     label: 'Revenue',
+    superAdminOnly: true,
     items: [
       { to: '/revenue', label: 'Overview', icon: TrendingUp, end: true },
       { to: '/revenue/by-creator', label: 'By Creator', icon: Users },
@@ -59,26 +68,47 @@ const NAV = [
   },
   {
     label: 'Users',
+    superAdminOnly: true,
     items: [
       { to: '/users', label: 'User List', icon: Users },
-      { to: '/walkin/manual-deposit', label: 'Walk-in Deposit', icon: HandCoins },
+      { to: '/walkin/manual-deposit', label: 'Walk-in Deposit', icon: HandCoins, superAdminOnly: true },
     ],
   },
   {
     label: 'Reviews',
+    superAdminOnly: true,
     items: [{ to: '/reviews', label: 'Reviews', icon: MessageSquare }],
   },
   {
     label: 'Analytics',
+    superAdminOnly: true,
     items: [{ to: '/analytics/content', label: 'Content Performance', icon: BarChart3 }],
   },
   {
+    label: 'Administration',
+    superAdminOnly: true,
+    items: [
+      { to: '/staff', label: 'Staff Management', icon: ShieldCheck, superAdminOnly: true },
+      { to: '/staff/activity', label: 'Staff Activity Log', icon: History, superAdminOnly: true },
+    ],
+  },
+  {
     label: 'System',
-    items: [{ to: '/settings', label: 'Settings', icon: Settings }],
+    superAdminOnly: true,
+    items: [{ to: '/settings', label: 'Settings', icon: Settings, superAdminOnly: true }],
   },
 ]
 
 export function Sidebar({ onNavigate }) {
+  const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = checkSuperAdmin(user)
+
+  const filteredNav = NAV.map((group) => {
+    if (group.superAdminOnly && !isSuperAdmin) return null
+    const visibleItems = group.items.filter((item) => !item.superAdminOnly || isSuperAdmin)
+    if (visibleItems.length === 0) return null
+    return { ...group, items: visibleItems }
+  }).filter(Boolean)
   return (
     <aside className="flex h-full w-64 flex-col border-r border-border bg-surface">
       <div className="flex h-16 items-center gap-2.5 border-b border-border px-5">
@@ -94,7 +124,7 @@ export function Sidebar({ onNavigate }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {NAV.map((group) => (
+        {filteredNav.map((group) => (
           <div key={group.label} className="mb-5">
             <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
               {group.label}
@@ -135,6 +165,12 @@ export function Sidebar({ onNavigate }) {
       </nav>
 
       <div className="border-t border-border px-5 py-3">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[10px] text-text-muted font-medium">Console Access</span>
+          <Badge tone={isSuperAdmin ? 'accent' : 'neutral'}>
+            {isSuperAdmin ? 'Super Admin' : 'Staff'}
+          </Badge>
+        </div>
         <p className="text-[10px] text-text-muted">
           v1.0.0 · ADWA SHORT Ops
           <br />

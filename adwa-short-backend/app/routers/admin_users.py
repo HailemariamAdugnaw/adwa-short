@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.deps import get_current_admin
+from app.deps import get_current_admin, get_current_super_admin
+from app.models.admin import AdminUser
 from app.models.content import Episode, Series
 from app.models.engagement import ViewLog
 from app.models.subscription import Subscription, SubscriptionPlan, TimePass, TimePassPurchase
@@ -29,9 +30,17 @@ async def list_users(
     limit: int = Query(default=50, le=200),
     offset: int | None = Query(default=None, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
-    stmt = select(User).options(selectinload(User.wallet))
+    admin_subq = select(AdminUser.user_id)
+    stmt = (
+        select(User)
+        .options(selectinload(User.wallet))
+        .where(
+            ~User.role.in_(("admin", "super_admin", "staff")),
+            ~User.id.in_(admin_subq),
+        )
+    )
     if role:
         stmt = stmt.where(User.role == role)
     if status == "active":
@@ -53,7 +62,7 @@ async def list_users(
 
 
 @router.get("/{user_id}", response_model=UserDetailOut)
-async def get_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)):
+async def get_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_super_admin)):
     res = await db.execute(select(User).options(selectinload(User.wallet)).where(User.id == user_id))
     u = res.scalar_one_or_none()
     if u is None:
@@ -158,7 +167,7 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = D
 async def get_user_wallet(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(User).where(User.id == user_id))
     u = res.scalar_one_or_none()
@@ -207,7 +216,7 @@ async def adjust_user(
     user_id: int,
     payload: AdminUserAdjust,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(User).where(User.id == user_id))
     u = res.scalar_one_or_none()
@@ -235,7 +244,7 @@ async def adjust_user(
 
 
 @router.post("/{user_id}/ban", response_model=UserOut)
-async def ban_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)):
+async def ban_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_super_admin)):
     res = await db.execute(select(User).where(User.id == user_id))
     u = res.scalar_one_or_none()
     if u is None:
@@ -247,7 +256,7 @@ async def ban_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = D
 
 
 @router.post("/{user_id}/unban", response_model=UserOut)
-async def unban_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)):
+async def unban_user(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_super_admin)):
     res = await db.execute(select(User).where(User.id == user_id))
     u = res.scalar_one_or_none()
     if u is None:

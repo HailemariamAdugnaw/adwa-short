@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user, get_settings_dict, get_int_setting
@@ -71,10 +72,21 @@ async def login(
     x_platform: str = Header(default="android", alias="X-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
-    res = await db.execute(select(User).where(User.phone == payload.phone))
+    ident = (payload.identifier or payload.phone or payload.email or payload.username or "").strip()
+    if not ident:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Identifier (phone, email, or username) required")
+
+    stmt = select(User).options(selectinload(User.admin_profile)).where(
+        or_(
+            User.phone == ident,
+            User.email.ilike(ident),
+            User.display_name.ilike(ident),
+        )
+    )
+    res = await db.execute(stmt)
     user = res.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid phone or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid phone/email/username or password")
     if not user.is_active or user.is_banned:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled or banned")
 
@@ -82,31 +94,64 @@ async def login(
     max_devices = get_int_setting(settings, "max_devices_per_account", 2)
     paid_tier = await is_paid_tier(db, user.id)
 
-    try:
-        await register_or_touch_device(
-            db,
-            user,
-            device_fingerprint=x_device_id,
-            device_name=x_device_name,
-            platform=x_platform,
-            max_devices=max_devices,
-        )
-    except DeviceLimitError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="MAX_DEVICE_LIMIT_REACHED",
-        )
+    # Viewer accounts enforce device count limiter; admin/staff console logins register device without blocking
+    is_admin_user = user.is_staff or user.role in ("admin", "super_admin", "staff")
+    if not is_admin_user:
+        try:
+            await register_or_touch_device(
+                db,
+                user,
+                device_fingerprint=x_device_id,
+                device_name=x_device_name,
+                platform=x_platform,
+                max_devices=max_devices,
+            )
+        except DeviceLimitError:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="MAX_DEVICE_LIMIT_REACHED",
+            )
+    else:
+        try:
+            await register_or_touch_device(
+                db,
+                user,
+                device_fingerprint=x_device_id,
+                device_name=x_device_name,
+                platform=x_platform,
+                max_devices=999,
+            )
+        except Exception:
+            pass
 
     await _ensure_wallet(db, user)
     await db.commit()
 
-    access = create_access_token(str(user.id), extra={"role": user.role, "phone": user.phone})
-    refresh = create_refresh_token(str(user.id), extra={"role": user.role})
+    access = create_access_token(
+        str(user.id),
+        extra={
+            "role": user.role,
+            "admin_role": user.admin_role,
+            "phone": user.phone,
+            "email": user.email,
+            "display_name": user.display_name,
+        },
+    )
+    refresh = create_refresh_token(
+        str(user.id),
+        extra={
+            "role": user.role,
+            "admin_role": user.admin_role,
+        },
+    )
     return TokenResponse(
         access_token=access,
         refresh_token=refresh,
         user_id=user.id,
         role=user.role,
+        admin_role=user.admin_role,
+        display_name=user.display_name,
+        email=user.email,
         is_paid_tier=paid_tier,
         device_limit_enforced=paid_tier,
     )
@@ -125,18 +170,36 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    res = await db.execute(select(User).where(User.id == uid))
+    res = await db.execute(select(User).options(selectinload(User.admin_profile)).where(User.id == uid))
     user = res.scalar_one_or_none()
     if user is None or not user.is_active or user.is_banned:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account not available")
 
-    access = create_access_token(str(user.id), extra={"role": user.role, "phone": user.phone})
-    new_refresh = create_refresh_token(str(user.id), extra={"role": user.role})
+    access = create_access_token(
+        str(user.id),
+        extra={
+            "role": user.role,
+            "admin_role": user.admin_role,
+            "phone": user.phone,
+            "email": user.email,
+            "display_name": user.display_name,
+        },
+    )
+    new_refresh = create_refresh_token(
+        str(user.id),
+        extra={
+            "role": user.role,
+            "admin_role": user.admin_role,
+        },
+    )
     return TokenResponse(
         access_token=access,
         refresh_token=new_refresh,
         user_id=user.id,
         role=user.role,
+        admin_role=user.admin_role,
+        display_name=user.display_name,
+        email=user.email,
     )
 
 

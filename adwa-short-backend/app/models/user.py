@@ -24,8 +24,38 @@ class User(Base):
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    wallet: Mapped[Optional["Wallet"]] = relationship(back_populates="user", uselist=False, lazy="selectin")
+    wallet: Mapped[Optional["Wallet"]] = relationship(
+        back_populates="user",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
     devices: Mapped[List["Device"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    admin_profile: Mapped[Optional["AdminUser"]] = relationship(
+        "AdminUser",
+        back_populates="user",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def admin_role(self) -> Optional[str]:
+        if self.admin_profile and self.admin_profile.role_label:
+            return self.admin_profile.role_label
+        if self.role in ("super_admin", "staff"):
+            return self.role
+        if self.role == "admin":
+            return "super_admin"
+        return None
+
+    @property
+    def is_super_admin(self) -> bool:
+        return self.admin_role == "super_admin"
+
+    @property
+    def is_staff(self) -> bool:
+        return self.admin_role in ("staff", "super_admin")
 
     @property
     def balance_birr(self) -> float:

@@ -7,7 +7,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_admin, get_current_user
+from app.deps import get_current_admin, get_current_super_admin, get_current_user
 from app.models.content import Episode
 from app.models.review import Review
 from app.models.user import User
@@ -114,7 +114,7 @@ async def admin_list_reviews(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     stmt = select(Review, User).join(User, User.id == Review.user_id, isouter=True)
     count_stmt = select(func.count(Review.id))
@@ -139,7 +139,7 @@ async def admin_list_reviews(
 async def admin_delete_review(
     review_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Review).where(Review.id == review_id))
     review = res.scalar_one_or_none()

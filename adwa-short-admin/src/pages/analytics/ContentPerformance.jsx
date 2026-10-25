@@ -15,7 +15,7 @@ import {
   Search,
   X,
 } from 'lucide-react'
-import { useContentPerformance, useContentEpisodesPerformance } from '../../lib/hooks'
+import { useContentPerformance, useContentEpisodesPerformance, useSeriesList } from '../../lib/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -40,6 +40,7 @@ import { formatNumber, formatPercent } from '../../lib/format'
 export function ContentPerformance() {
   const qc = useQueryClient()
   const { data: seriesData, isLoading: loadingSeries, isError: errorSeries } = useContentPerformance()
+  const { data: allSeries } = useSeriesList({ limit: 100 })
   const [viewMode, setViewMode] = useState('series')
   const [selectedSeriesId, setSelectedSeriesId] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -55,15 +56,14 @@ export function ContentPerformance() {
   const seriesRows = Array.isArray(seriesData?.top_content) ? seriesData.top_content : []
   const episodeRows = Array.isArray(episodesData) ? episodesData : []
 
-  // Global KPIs across all series
-  const totalQualifiedViews = seriesRows.reduce((acc, r) => acc + (r.qualified_views ?? r.views ?? 0), 0)
-  const totalCoinViews = seriesRows.reduce((acc, r) => acc + (r.coin_views ?? 0), 0)
-  const totalPassSubViews = seriesRows.reduce(
-    (acc, r) => acc + ((r.pass_views ?? 0) + (r.subscription_views ?? 0)),
-    0,
-  )
-  const totalAdViews = seriesRows.reduce((acc, r) => acc + (r.ad_views ?? 0), 0)
-  const totalWatchHours = seriesRows.reduce((acc, r) => acc + (r.watch_hours ?? 0), 0)
+  // Build complete series options from all available series
+  const seriesOptions = [
+    { value: '', label: 'All Series' },
+    ...((allSeries && allSeries.length > 0 ? allSeries : seriesRows).map((s) => ({
+      value: String(s.id ?? s.series_id),
+      label: s.title,
+    }))),
+  ]
 
   // Filter series or episodes dynamically in real time
   let activeRows = viewMode === 'series' ? seriesRows : episodeRows
@@ -80,6 +80,16 @@ export function ContentPerformance() {
         (r.series_title ?? '').toLowerCase().includes(q)
     )
   }
+
+  // Dynamic KPIs: dynamically calculate from currently filtered/active content
+  const totalQualifiedViews = activeRows.reduce((acc, r) => acc + (r.qualified_views ?? r.views ?? 0), 0)
+  const totalCoinViews = activeRows.reduce((acc, r) => acc + (r.coin_views ?? 0), 0)
+  const totalPassSubViews = activeRows.reduce(
+    (acc, r) => acc + ((r.pass_views ?? 0) + (r.subscription_views ?? 0)),
+    0,
+  )
+  const totalAdViews = activeRows.reduce((acc, r) => acc + (r.ad_views ?? 0), 0)
+  const totalWatchHours = activeRows.reduce((acc, r) => acc + (r.watch_hours ?? 0), 0)
 
   const sortedRows = activeRows
     .slice()
@@ -188,10 +198,7 @@ export function ContentPerformance() {
             label="Filter by Series"
             value={selectedSeriesId}
             onChange={(e) => setSelectedSeriesId(e.target.value)}
-            options={[
-              { value: '', label: 'All Series' },
-              ...seriesRows.map((s) => ({ value: String(s.series_id), label: s.title })),
-            ]}
+            options={seriesOptions}
           />
           <Select
             label="Sort By"
@@ -199,9 +206,10 @@ export function ContentPerformance() {
             onChange={(e) => setSortBy(e.target.value)}
             options={[
               { value: 'qualified_views', label: 'Qualified Views (≥1m)' },
-              { value: 'coin_views', label: 'Coin-Unlocked Views' },
-              { value: 'pass_views', label: 'Pass/Sub-Attributed Views' },
-              { value: 'ad_views', label: 'Ad-Unlocked Views' },
+              { value: 'coin_views', label: 'Coin Views (PPV)' },
+              { value: 'pass_views', label: 'Pass Views' },
+              { value: 'subscription_views', label: 'Subscription Views' },
+              { value: 'ad_views', label: 'Ad Views' },
               { value: 'watch_hours', label: 'Watch Hours' },
               { value: 'likes', label: 'Ratings' },
               { value: 'completion_rate', label: 'Completion Rate' },
@@ -254,16 +262,16 @@ export function ContentPerformance() {
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-amber-500 font-medium">
-              Coins
+              Coin Views
             </span>
             <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-500 font-medium">
-              Time Pass
+              Pass Views
             </span>
             <span className="inline-flex items-center gap-1 rounded bg-purple-500/10 px-2 py-0.5 text-purple-400 font-medium">
-              Subscription
+              Subscription Views
             </span>
             <span className="inline-flex items-center gap-1 rounded bg-sky-500/10 px-2 py-0.5 text-sky-500 font-medium">
-              Ads
+              Ad Views
             </span>
           </div>
         </CardHeader>
@@ -277,14 +285,14 @@ export function ContentPerformance() {
                   Qualified Views <ArrowUpDown className="h-3 w-3" />
                 </span>
               </TH>
-              <TH className="text-right">Coins</TH>
-              <TH className="text-right">Time Pass</TH>
-              <TH className="text-right">Subscription</TH>
-              <TH className="text-right">Ads</TH>
+              <TH className="text-right">Coin Views</TH>
+              <TH className="text-right">Pass Views</TH>
+              <TH className="text-right">Subscription Views</TH>
+              <TH className="text-right">Ad Views</TH>
               <TH className="min-w-[120px] text-right">Watch Duration</TH>
               <TH className="text-right">Ratings</TH>
               <TH className="text-right">Reviews</TH>
-              <TH className="text-right">Completion</TH>
+              <TH className="text-right">Completion Rate</TH>
             </TR>
           </THead>
           <TBody>

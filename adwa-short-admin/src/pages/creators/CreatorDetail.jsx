@@ -40,6 +40,7 @@ import { AreaChartCard } from '../../components/charts/AreaChartCard'
 import { DonutChartCard } from '../../components/charts/DonutChartCard'
 import { CreatorForm } from '../../components/content/CreatorForm'
 import { PayoutForm } from '../../components/content/PayoutForm'
+import { useAuthStore } from '../../lib/store'
 import {
   formatBirr,
   formatNumber,
@@ -52,12 +53,16 @@ import {
 export function CreatorDetail() {
   const { id } = useParams()
   const qc = useQueryClient()
-  const { data: creator, isLoading } = useCreator(id)
-  const { data: revenue, isLoading: loadingRevenue } = useCreatorRevenue(id)
-  const { data: content, isLoading: loadingContent } = useCreatorContent(id)
-  const { data: payouts, isLoading: loadingPayouts } = useCreatorPayouts(id)
+  const authUser = useAuthStore((s) => s.user)
+  const adminRole = authUser?.admin_role || (authUser?.role === 'admin' ? 'super_admin' : authUser?.role)
+  const isSuperAdmin = adminRole === 'super_admin'
 
-  const [tab, setTab] = useState('overview')
+  const { data: creator, isLoading } = useCreator(id)
+  const { data: revenue, isLoading: loadingRevenue } = useCreatorRevenue(id, { enabled: isSuperAdmin })
+  const { data: content, isLoading: loadingContent } = useCreatorContent(id)
+  const { data: payouts, isLoading: loadingPayouts } = useCreatorPayouts(id, { enabled: isSuperAdmin })
+
+  const [tab, setTab] = useState(isSuperAdmin ? 'overview' : 'content')
   const [contentViewMode, setContentViewMode] = useState('series')
   const [revenueViewMode, setRevenueViewMode] = useState('series')
   const [editOpen, setEditOpen] = useState(false)
@@ -94,6 +99,88 @@ export function CreatorDetail() {
     { name: 'Creator Net', value: Number(creatorNet ?? 0), color: '#10B981' },
     { name: 'Platform', value: Number(platformShare ?? 0), color: '#C8102E' },
   ]
+
+  const creatorInfoCards = (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <Card padding="md">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-accent" />
+            Linked Bank &amp; Payout Account
+          </CardTitle>
+        </CardHeader>
+        <div className="space-y-2.5 text-xs">
+          <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+            <span className="text-text-secondary">Bank / Service</span>
+            <span className="font-medium text-text-primary">{creator.bank_name || 'Not configured'}</span>
+          </div>
+          <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+            <span className="text-text-secondary">Account Holder</span>
+            <span className="font-medium text-text-primary">{creator.bank_account_name || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+            <span className="text-text-secondary">Account Number</span>
+            <span className="font-mono text-text-primary">{creator.bank_account_number || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+            <span className="text-text-secondary">Payout Method</span>
+            <span className="font-medium capitalize text-text-primary">{creator.payment_method || 'Bank Transfer'}</span>
+          </div>
+        </div>
+      </Card>
+
+      <Card padding="md">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <FileText className="h-4 w-4 text-accent" />
+            Legal Contract &amp; Information
+          </CardTitle>
+        </CardHeader>
+        <div className="space-y-2.5 text-xs">
+          <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+            <span className="text-text-secondary">Contract Status</span>
+            {creator.legal_contract_url ? (
+              <a
+                href={creator.legal_contract_url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-accent hover:underline flex items-center gap-1"
+              >
+                View Signed Agreement ({formatDate(creator.contract_signed_date)})
+              </a>
+            ) : (
+              <span className="text-text-muted">No contract on file</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+            <span className="text-text-secondary">Default Split Ratio</span>
+            <span className="font-semibold text-text-primary">
+              {formatPercent(creator.default_revenue_split_pct ?? 50, 0)} Creator / {formatPercent(100 - (creator.default_revenue_split_pct ?? 50), 0)} Platform
+            </span>
+          </div>
+          {isSuperAdmin && (
+            <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
+              <span className="text-text-secondary">Active Split Overrides</span>
+              <span className="font-medium text-text-primary">
+                {rules.length} rule{rules.length === 1 ? '' : 's'} configured
+              </span>
+            </div>
+          )}
+          <div className="pt-1">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="w-full text-xs"
+              leftIcon={<Pencil className="h-3.5 w-3.5" />}
+              onClick={() => setEditOpen(true)}
+            >
+              {isSuperAdmin ? 'Edit Creator Info & Revenue Split' : 'Edit Creator Profile'}
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
 
   const tabs = [
     {
@@ -171,83 +258,7 @@ export function CreatorDetail() {
               </div>
             </div>
           </Card>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Card padding="md">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-accent" />
-                  Linked Bank &amp; Payout Account
-                </CardTitle>
-              </CardHeader>
-              <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Bank / Service</span>
-                  <span className="font-medium text-text-primary">{creator.bank_name || 'Not configured'}</span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Account Holder</span>
-                  <span className="font-medium text-text-primary">{creator.bank_account_name || '—'}</span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Account Number</span>
-                  <span className="font-mono text-text-primary">{creator.bank_account_number || '—'}</span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Payout Method</span>
-                  <span className="font-medium capitalize text-text-primary">{creator.payment_method || 'Bank Transfer'}</span>
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="md">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-accent" />
-                  Legal Contract &amp; Custom Split Rules
-                </CardTitle>
-              </CardHeader>
-              <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Contract Status</span>
-                  {creator.legal_contract_url ? (
-                    <a
-                      href={creator.legal_contract_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-accent hover:underline flex items-center gap-1"
-                    >
-                      View Signed Agreement ({formatDate(creator.contract_signed_date)})
-                    </a>
-                  ) : (
-                    <span className="text-text-muted">No contract on file</span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Default Split Ratio</span>
-                  <span className="font-semibold text-text-primary">
-                    {formatPercent(creator.default_revenue_split_pct ?? 50, 0)} Creator / {formatPercent(100 - (creator.default_revenue_split_pct ?? 50), 0)} Platform
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded border border-border bg-surface-2/30 px-3 py-2">
-                  <span className="text-text-secondary">Active Split Overrides</span>
-                  <span className="font-medium text-text-primary">
-                    {rules.length} rule{rules.length === 1 ? '' : 's'} configured
-                  </span>
-                </div>
-                <div className="pt-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="w-full text-xs"
-                    leftIcon={<Pencil className="h-3.5 w-3.5" />}
-                    onClick={() => setEditOpen(true)}
-                  >
-                    Edit Creator Info &amp; Revenue Split
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </div>
+          {creatorInfoCards}
         </div>
       ),
     },
@@ -653,6 +664,13 @@ export function CreatorDetail() {
     },
   ]
 
+  const displayTabs = isSuperAdmin
+    ? tabs
+    : [
+        tabs.find((t) => t.id === 'content') || tabs[1],
+        { id: 'profile', label: 'Creator Profile', content: creatorInfoCards },
+      ]
+
   return (
     <div className="space-y-4">
       <div>
@@ -727,21 +745,23 @@ export function CreatorDetail() {
               leftIcon={<Pencil className="h-4 w-4" />}
               onClick={() => setEditOpen(true)}
             >
-              Edit
+              {isSuperAdmin ? 'Edit' : 'Edit Profile'}
             </Button>
-            <Button
-              variant="primary"
-              leftIcon={<HandCoins className="h-4 w-4" />}
-              onClick={() => setPayoutOpen(true)}
-              disabled={pendingBalance <= 0}
-            >
-              Process Payout
-            </Button>
+            {isSuperAdmin && (
+              <Button
+                variant="primary"
+                leftIcon={<HandCoins className="h-4 w-4" />}
+                onClick={() => setPayoutOpen(true)}
+                disabled={pendingBalance <= 0}
+              >
+                Process Payout
+              </Button>
+            )}
           </div>
         </div>
       </Card>
 
-      <Tabs items={tabs} value={tab} onChange={setTab} />
+      <Tabs items={displayTabs} value={tab} onChange={setTab} />
 
       <Modal
         open={editOpen}

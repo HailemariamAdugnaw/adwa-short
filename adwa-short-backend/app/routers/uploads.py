@@ -9,9 +9,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
+from app.database import get_db
 from app.deps import get_current_admin
 from app.models.user import User
 from app.schemas.admin import UploadResponse
+from app.services.audit import log_activity
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -112,7 +114,8 @@ def _validate_video(file: UploadFile) -> str:
 @router.post("/poster", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_poster(
     file: UploadFile = File(...),
-    _: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
 ):
     ext = _safe_ext(file.filename or "poster.jpg")
     if ext not in ALLOWED_POSTER_EXTS:
@@ -124,13 +127,16 @@ async def upload_poster(
     if len(data) > settings.MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
     target.write_bytes(data)
+    await log_activity(db, admin, "upload", "media", None, f"Uploaded poster '{file.filename or fname}' ({len(data)} bytes)")
+    await db.commit()
     return UploadResponse(url=f"/uploads/posters/{fname}", filename=fname, size_bytes=len(data))
 
 
 @router.post("/video", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_video(
     file: UploadFile = File(...),
-    _: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
 ):
     ext = _validate_video(file)
     _ensure_dirs()
@@ -155,6 +161,8 @@ async def upload_video(
             f.write(chunk)
     _optimize_video_faststart(target)
     final_size = target.stat().st_size
+    await log_activity(db, admin, "upload", "media", None, f"Uploaded video '{file.filename or fname}' ({final_size} bytes)")
+    await db.commit()
     return UploadResponse(url=f"/uploads/videos/{fname}", filename=fname, size_bytes=final_size)
 
 

@@ -7,7 +7,7 @@ from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_admin
+from app.deps import get_current_admin, get_current_super_admin
 from app.models.admin import ManualCashDeposit
 from app.models.user import User
 from app.models.wallet import Wallet, WalletTransaction
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/admin/wallet", tags=["admin-wallet"])
 async def manual_deposit(
     payload: ManualDepositRequest,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(User).where(User.id == payload.user_id))
     u = res.scalar_one_or_none()

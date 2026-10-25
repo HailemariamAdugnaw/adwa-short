@@ -1,13 +1,25 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useAuthStore } from '../../lib/store'
+import { useMe } from '../../lib/hooks'
 
 export function AdminLayout() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const setUser = useAuthStore((s) => s.setUser)
   const location = useLocation()
   const [mobileNav, setMobileNav] = useState(false)
+  const { data: me } = useMe()
+
+  useEffect(() => {
+    if (me) {
+      setUser({
+        ...me,
+        admin_role: me.admin_role || (me.role === 'admin' ? 'super_admin' : me.role),
+      })
+    }
+  }, [me, setUser])
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />

@@ -8,7 +8,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_admin
+from app.deps import get_current_admin, get_current_super_admin
 from app.models.ad_unlock import AdUnlockLog
 from app.models.content import Episode, Series
 from app.models.engagement import ViewLog
@@ -41,9 +41,16 @@ router = APIRouter(prefix="/creators", tags=["creators"])
 async def create_creator(
     payload: CreatorCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_super_admin),
 ):
-    creator = Creator(**payload.model_dump())
+    data = payload.model_dump()
+    split_pct = data.get("default_revenue_split_pct")
+    if split_pct is not None and split_pct != 50.0 and not admin.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Admins can configure custom revenue split percentages",
+        )
+    creator = Creator(**data)
     db.add(creator)
     await db.commit()
     await db.refresh(creator)
@@ -56,7 +63,7 @@ async def list_creators(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     stmt = select(Creator)
     if is_active is not None:
@@ -144,7 +151,7 @@ async def list_creators(
 async def get_creator(
     creator_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Creator).where(Creator.id == creator_id))
     creator = res.scalar_one_or_none()
@@ -221,13 +228,22 @@ async def update_creator(
     creator_id: int,
     payload: CreatorUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Creator).where(Creator.id == creator_id))
     creator = res.scalar_one_or_none()
     if creator is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "default_revenue_split_pct" in data:
+        new_val = float(data["default_revenue_split_pct"])
+        curr_val = float(creator.default_revenue_split_pct or 50.0)
+        if new_val != curr_val and not admin.is_super_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Super Admins can adjust revenue split percentages",
+            )
+    for k, v in data.items():
         setattr(creator, k, v)
     await db.commit()
     await db.refresh(creator)
@@ -238,7 +254,7 @@ async def update_creator(
 async def deactivate_creator(
     creator_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Creator).where(Creator.id == creator_id))
     creator = res.scalar_one_or_none()
@@ -254,7 +270,7 @@ async def set_creator_split(
     creator_id: int,
     payload: SplitRuleCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Creator).where(Creator.id == creator_id))
     creator = res.scalar_one_or_none()
@@ -302,7 +318,7 @@ async def delete_creator_split_rule(
     creator_id: int,
     rule_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(
         select(RevenueSplitRule).where(
@@ -322,7 +338,7 @@ async def delete_creator_split_rule(
 async def creator_revenue_summary(
     creator_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Creator).where(Creator.id == creator_id))
     creator = res.scalar_one_or_none()
@@ -558,7 +574,7 @@ async def create_payout(
     creator_id: int,
     payload: PayoutCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(select(Creator).where(Creator.id == creator_id))
     creator = res.scalar_one_or_none()
@@ -590,7 +606,7 @@ async def list_payouts(
     limit: int = Query(default=50, le=200),
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_super_admin),
 ):
     res = await db.execute(
         select(Payout)
