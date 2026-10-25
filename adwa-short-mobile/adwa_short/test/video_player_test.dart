@@ -86,6 +86,54 @@ void main() {
       expect(scrubMs <= maxMs, isTrue);
     });
 
+    test('scrubbing and seeking state management prevents snap-back while dragging', () {
+      // Simulate controller playing at 10s
+      final controllerPosition = const Duration(seconds: 10);
+      var currentPosition = controllerPosition;
+      var isScrubbing = false;
+      var isSeeking = false;
+      var scrubPositionMs = 0.0;
+
+      Duration computeDisplayPosition() {
+        return (isScrubbing || isSeeking)
+            ? Duration(milliseconds: scrubPositionMs.round())
+            : currentPosition;
+      }
+
+      // Initial state: bound to playback position
+      expect(computeDisplayPosition(), const Duration(seconds: 10));
+
+      // User starts dragging scrubber to 45s
+      isScrubbing = true;
+      scrubPositionMs = 45000.0;
+      expect(computeDisplayPosition(), const Duration(seconds: 45));
+
+      // While dragging, simulated controller/timer update fires with stale time (11s)
+      final incomingControllerPos = const Duration(seconds: 11);
+      if (!isScrubbing && !isSeeking) {
+        currentPosition = incomingControllerPos;
+      }
+      // Position remains 45s, not snapped back to 11s!
+      expect(computeDisplayPosition(), const Duration(seconds: 45));
+
+      // User releases scrubber at 52s (seeking phase)
+      isScrubbing = false;
+      isSeeking = true;
+      scrubPositionMs = 52000.0;
+      currentPosition = const Duration(seconds: 52);
+
+      // Stale native event (e.g. 11s) before seek completes is ignored during isSeeking
+      if (!isScrubbing && !isSeeking) {
+        currentPosition = incomingControllerPos;
+      }
+      expect(computeDisplayPosition(), const Duration(seconds: 52));
+
+      // Seek completes and settles
+      isSeeking = false;
+      currentPosition = const Duration(seconds: 52);
+      expect(computeDisplayPosition(), const Duration(seconds: 52));
+    });
+
     test('pausing and resuming preserves exact live timestamp without reset', () {
       var livePosition = const Duration(seconds: 14, milliseconds: 320);
       var isPlaying = true;

@@ -67,6 +67,34 @@ def _ensure_dirs() -> None:
     Path(settings.UPLOAD_DIR, "videos").mkdir(parents=True, exist_ok=True)
 
 
+def _optimize_video_faststart(path: Path) -> None:
+    tmp_path = path.with_suffix(path.suffix + ".faststart.tmp")
+    try:
+        import av
+        inp = av.open(str(path))
+        out = av.open(str(tmp_path), "w", format="mp4", options={"movflags": "+faststart"})
+        stream_map = {}
+        for stream in inp.streams:
+            if stream.type in ("video", "audio"):
+                out_stream = out.add_stream_from_template(stream)
+                stream_map[stream.index] = out_stream
+        for packet in inp.demux():
+            if packet.stream.index in stream_map:
+                out_stream = stream_map[packet.stream.index]
+                if packet.dts is None:
+                    continue
+                packet.rescale_ts(out_stream.time_base)
+                packet.stream = out_stream
+                out.mux(packet)
+        inp.close()
+        out.close()
+        if tmp_path.exists() and tmp_path.stat().st_size > 0:
+            tmp_path.replace(path)
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
 def _validate_video(file: UploadFile) -> str:
     name = file.filename or ""
     ext = _safe_ext(name)
@@ -125,7 +153,9 @@ async def upload_video(
                     detail=f"Video too large (max {max_mb}MB)",
                 )
             f.write(chunk)
-    return UploadResponse(url=f"/uploads/videos/{fname}", filename=fname, size_bytes=size)
+    _optimize_video_faststart(target)
+    final_size = target.stat().st_size
+    return UploadResponse(url=f"/uploads/videos/{fname}", filename=fname, size_bytes=final_size)
 
 
 def _is_safe_filename(filename: str) -> bool:

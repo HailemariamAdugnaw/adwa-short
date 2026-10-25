@@ -113,6 +113,9 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   bool _toggleInProgress = false;
   bool _isScrubbing = false;
   double _scrubPositionMs = 0.0;
+  bool _isSeeking = false;
+  bool _wasPlayingBeforeScrub = false;
+  Timer? _seekDebounceTimer;
 
   bool get _isEmbedded =>
       widget.presentation == VideoPlayerPresentation.embedded;
@@ -206,6 +209,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   Future<void> _switchVideo() async {
     if (_isInitializing) return;
     _isInitializing = true;
+    _seekDebounceTimer?.cancel();
     _hideControlsTimer?.cancel();
     _stopProgressTimer();
     if (mounted) {
@@ -219,6 +223,8 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         _position = Duration.zero;
         _duration = widget.knownDuration;
         _isScrubbing = false;
+        _isSeeking = false;
+        _wasPlayingBeforeScrub = false;
         _scrubPositionMs = 0.0;
       });
     }
@@ -376,7 +382,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       widget.onPlayingChanged?.call(playingNow);
     }
 
-    if (c.value.isInitialized) {
+    if (!_isScrubbing && !_isSeeking && c.value.isInitialized) {
       // Don't let an uninitialized zero position wipe out an advancing position,
       // unless playback actually reset / looped back to the beginning.
       if (posNow > Duration.zero ||
@@ -389,7 +395,11 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       }
     }
 
-    if (mounted && !_isDisposed && (playingChanged || posChanged || durChanged)) {
+    if (mounted &&
+        !_isDisposed &&
+        (playingChanged ||
+            (!_isScrubbing && !_isSeeking && posChanged) ||
+            durChanged)) {
       setState(() {});
     }
   }
@@ -424,9 +434,11 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         try {
           livePos = await c.position;
         } catch (_) {}
-        final resumePos = (livePos != null && livePos > Duration.zero)
-            ? livePos
-            : (_position > Duration.zero ? _position : c.value.position);
+        final resumePos = _position > Duration.zero
+            ? _position
+            : ((livePos != null && livePos > Duration.zero)
+                ? livePos
+                : c.value.position);
 
         // Before calling c.play(), ensure c.value.duration is non-zero so c.play()
         // does not trigger `if (value.position == value.duration) seekTo(Duration.zero)`.
@@ -478,7 +490,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   void _startProgressTimer() {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
-      if (_isDisposed) return;
+      if (_isDisposed || _isScrubbing || _isSeeking) return;
       final c = _controller;
       if (c == null || !c.value.isInitialized) return;
 
@@ -493,7 +505,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         realPos = await c.position;
       } catch (_) {}
 
-      if (_isDisposed || !mounted) return;
+      if (_isDisposed || !mounted || _isScrubbing || _isSeeking) return;
 
       final currentLive = (realPos != null && realPos > Duration.zero)
           ? realPos
@@ -512,11 +524,11 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         _duration = durNow;
       }
 
-      if (!_isScrubbing) {
+      if (!_isScrubbing && !_isSeeking) {
         _position = currentLive;
       }
 
-      if (mounted && !_isDisposed) {
+      if (mounted && !_isDisposed && !_isScrubbing && !_isSeeking) {
         setState(() {});
       }
     });
@@ -558,6 +570,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
 
   Future<void> _retry() async {
     if (_isDisposed) return;
+    _seekDebounceTimer?.cancel();
     setState(() {
       _hasError = false;
       _errorMessage = '';
@@ -566,6 +579,8 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       _completionSent = false;
       _showControls = true;
       _isScrubbing = false;
+      _isSeeking = false;
+      _wasPlayingBeforeScrub = false;
       _scrubPositionMs = 0.0;
     });
     _hideControlsTimer?.cancel();
@@ -581,6 +596,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   @override
   void dispose() {
     _isDisposed = true;
+    _seekDebounceTimer?.cancel();
     _hideControlsTimer?.cancel();
     _stopProgressTimer();
     _disposeController();
@@ -776,88 +792,137 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
           final maxMs = totalDuration.inMilliseconds.toDouble();
           final bool hasValidDuration =
               totalDuration >= const Duration(seconds: 1);
-          final currentPosition = _isScrubbing
-              ? Duration(milliseconds: _scrubPositionMs.round())
-              : (_position > Duration.zero ? _position : value.position);
-          final currentMs = currentPosition.inMilliseconds.toDouble();
 
           final sliderMax = hasValidDuration ? maxMs : 1.0;
-          final sliderValue =
-              hasValidDuration ? currentMs.clamp(0.0, sliderMax) : 0.0;
+          final sliderValue = hasValidDuration
+              ? _position.inMilliseconds.toDouble().clamp(0.0, sliderMax)
+              : 0.0;
 
           return Container(
-            padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPadding),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  height: 20,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (c.value.duration >= const Duration(seconds: 1) &&
-                          !_isScrubbing)
-                        VideoProgressIndicator(
-                          c,
-                          allowScrubbing: false,
-                          colors: const VideoProgressColors(
-                            playedColor: Colors.transparent,
-                            bufferedColor: Colors.white24,
-                            backgroundColor: Colors.white12,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 3.0,
-                          thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 6.0),
-                          overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 14.0),
-                          activeTrackColor: AppColors.bloodRed,
-                          inactiveTrackColor:
-                              c.value.duration >= const Duration(seconds: 1)
-                                  ? Colors.transparent
-                                  : Colors.white24,
-                          thumbColor: AppColors.bloodRed,
-                          overlayColor:
-                              AppColors.bloodRed.withValues(alpha: 0.2),
-                        ),
-                        child: Slider(
-                          value: sliderValue,
-                          min: 0.0,
-                          max: sliderMax,
-                          onChangeStart: hasValidDuration
-                              ? (val) {
-                                  setState(() {
-                                    _isScrubbing = true;
-                                    _scrubPositionMs = val;
-                                  });
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragStart: (_) {},
+                  onVerticalDragUpdate: (_) {},
+                  onVerticalDragEnd: (_) {},
+                  child: SizedBox(
+                    height: 36,
+                    child: SliderTheme(
+                      data: SliderThemeData(
+                        trackHeight: 3.0,
+                        thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 6.0,
+                            pressedElevation: 4.0),
+                        overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 16.0),
+                        activeTrackColor: AppColors.bloodRed,
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: AppColors.bloodRed,
+                        overlayColor:
+                            AppColors.bloodRed.withValues(alpha: 0.25),
+                      ),
+                      child: Slider(
+                        value: sliderValue,
+                        min: 0.0,
+                        max: sliderMax,
+                        allowedInteraction: SliderInteraction.tapAndSlide,
+                        onChangeStart: hasValidDuration
+                            ? (val) {
+                                _stopProgressTimer();
+                                _seekDebounceTimer?.cancel();
+                                _hideControlsTimer?.cancel();
+                                _wasPlayingBeforeScrub = c.value.isPlaying;
+                                _isScrubbing = true;
+                                _isSeeking = false;
+                                if (_wasPlayingBeforeScrub) {
+                                  c.pause();
                                 }
-                              : null,
-                          onChanged: hasValidDuration
-                              ? (val) {
-                                  setState(() {
-                                    _scrubPositionMs = val;
-                                  });
+                                setState(() {
+                                  _position = Duration(
+                                      milliseconds: val
+                                          .clamp(0.0, sliderMax)
+                                          .round());
+                                  _showControls = true;
+                                });
+                              }
+                            : null,
+                        onChanged: hasValidDuration
+                            ? (val) {
+                                setState(() {
+                                  _isScrubbing = true;
+                                  _position = Duration(
+                                      milliseconds: val
+                                          .clamp(0.0, sliderMax)
+                                          .round());
+                                  _showControls = true;
+                                });
+                              }
+                            : null,
+                        onChangeEnd: hasValidDuration
+                            ? (val) async {
+                                final seekTarget = Duration(
+                                    milliseconds: val
+                                        .clamp(0.0, sliderMax)
+                                        .toInt());
+                                setState(() {
+                                  _isScrubbing = false;
+                                  _isSeeking = true;
+                                  _position = seekTarget;
+                                  _showControls = true;
+                                });
+
+                                final effDur = _effectiveDuration;
+                                if (effDur >= const Duration(seconds: 1)) {
+                                  c.value = c.value.copyWith(
+                                    duration: effDur,
+                                    position: seekTarget,
+                                  );
                                 }
-                              : null,
-                          onChangeEnd: hasValidDuration
-                              ? (val) async {
-                                  final seekTarget =
-                                      Duration(milliseconds: val.round());
-                                  await c.seekTo(seekTarget);
+
+                                try {
+                                  await _controller?.seekTo(seekTarget);
+                                } catch (_) {}
+
+                                if (!mounted || _isDisposed) return;
+
+                                if (_wasPlayingBeforeScrub) {
+                                  if (effDur >= const Duration(seconds: 1)) {
+                                    c.value = c.value.copyWith(
+                                      duration: effDur,
+                                      position: seekTarget,
+                                    );
+                                  }
+                                  await c.play();
+                                  if (!mounted || _isDisposed) return;
+                                  setState(() {
+                                    _isPlaying = true;
+                                    _position = seekTarget;
+                                    _showControls = true;
+                                  });
+                                  _resetHideTimer();
+                                  widget.onPlayingChanged?.call(true);
+                                } else {
+                                  _resetHideTimer();
+                                }
+
+                                _startProgressTimer();
+
+                                _seekDebounceTimer?.cancel();
+                                _seekDebounceTimer = Timer(
+                                    const Duration(milliseconds: 500), () {
                                   if (mounted && !_isDisposed) {
                                     setState(() {
-                                      _isScrubbing = false;
-                                      _position = seekTarget;
+                                      _isSeeking = false;
                                     });
                                   }
-                                }
-                              : null,
-                        ),
+                                });
+                              }
+                            : null,
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -865,7 +930,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      formatDuration(currentPosition),
+                      formatDuration(_position),
                       style: AppTextStyles.caption.copyWith(
                         color: AppColors.white,
                         fontSize: 11,
@@ -875,9 +940,9 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
                     Text(
                       formatDuration(totalDuration),
                       style: AppTextStyles.caption.copyWith(
-                        color: AppColors.white,
+                        color: Colors.white70,
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
