@@ -14,11 +14,13 @@ class Creator(Base):
     __tablename__ = "creators"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     legal_contract_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     contract_signed_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -27,12 +29,15 @@ class Creator(Base):
     bank_account_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     bank_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     payment_method: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    mobile_money_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    tax_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     default_revenue_split_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=50.0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], back_populates="creator_profile", lazy="selectin")
     split_rules: Mapped[list["RevenueSplitRule"]] = relationship(
         back_populates="creator", cascade="all, delete-orphan"
     )

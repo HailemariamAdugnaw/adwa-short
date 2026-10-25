@@ -27,10 +27,20 @@ class TokenResponse(BaseModel):
     user_id: int
     role: str
     admin_role: Optional[str] = None
+    creator_id: Optional[int] = None
     display_name: Optional[str] = None
     email: Optional[str] = None
     is_paid_tier: bool = False
     device_limit_enforced: bool = False
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=6, max_length=128)
 
 
 class RefreshRequest(BaseModel):

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.revenue import Creator
 from app.models.settings import AppSettings as SettingsModel
 from app.models.user import User
 from app.security import decode_token
@@ -63,6 +64,36 @@ async def get_current_super_admin(user: User = Depends(get_current_admin)) -> Us
     if not user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin privileges required")
     return user
+
+
+async def get_current_creator(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Creator:
+    creator = user.creator_profile
+    if creator is None:
+        res = await db.execute(select(Creator).where(Creator.user_id == user.id))
+        creator = res.scalar_one_or_none()
+
+    if creator is None and user.email:
+        res = await db.execute(select(Creator).where(Creator.email.ilike(user.email.strip())))
+        creator = res.scalar_one_or_none()
+        if creator is not None and creator.user_id is None:
+            creator.user_id = user.id
+            await db.commit()
+            await db.refresh(creator)
+
+    if creator is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Creator privileges required. Account is not linked to any active creator profile.",
+        )
+    if not creator.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Creator account has been deactivated.",
+        )
+    return creator
 
 
 async def get_optional_user(

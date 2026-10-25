@@ -55,5 +55,14 @@ def create_refresh_token(sub: str, extra: Dict[str, Any] | None = None) -> str:
     )
 
 
+def create_password_reset_token(sub: str, email: str, expires_delta: timedelta = timedelta(hours=1)) -> str:
+    return _create_token(
+        sub,
+        "password_reset",
+        expires_delta,
+        {"email": email},
+    )
+
+
 def decode_token(token: str) -> Dict[str, Any]:
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])

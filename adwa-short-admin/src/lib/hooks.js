@@ -30,6 +30,12 @@ import {
   toggleStaffActive,
   deleteStaff,
   getStaffActivity,
+  getCreatorPortalDashboard,
+  getCreatorPortalContent,
+  getCreatorPortalReviews,
+  getCreatorPortalPayoutAccount,
+  getCreatorPortalTransactions,
+  getCreatorPortalProfile,
   errMsg,
 } from './api'
 import { useAuthStore } from './store'
@@ -467,5 +473,47 @@ export function useStaffActivity(params) {
     queryKey: ['admin', 'staff', 'activity', params],
     queryFn: () => getStaffActivity(params),
     placeholderData: (prev) => prev,
+  })
+}
+
+export function useCreatorPortalDashboard() {
+  return useQuery({
+    queryKey: ['creator', 'dashboard'],
+    queryFn: () => getCreatorPortalDashboard(),
+  })
+}
+
+export function useCreatorPortalContent(params) {
+  return useQuery({
+    queryKey: ['creator', 'content', params],
+    queryFn: () => getCreatorPortalContent(params),
+  })
+}
+
+export function useCreatorPortalReviews(params) {
+  return useQuery({
+    queryKey: ['creator', 'reviews', params],
+    queryFn: () => getCreatorPortalReviews(params),
+  })
+}
+
+export function useCreatorPortalPayoutAccount() {
+  return useQuery({
+    queryKey: ['creator', 'payout-account'],
+    queryFn: () => getCreatorPortalPayoutAccount(),
+  })
+}
+
+export function useCreatorPortalTransactions(params) {
+  return useQuery({
+    queryKey: ['creator', 'transactions', params],
+    queryFn: () => getCreatorPortalTransactions(params),
+  })
+}
+
+export function useCreatorPortalProfile() {
+  return useQuery({
+    queryKey: ['creator', 'profile'],
+    queryFn: () => getCreatorPortalProfile(),
   })
 }

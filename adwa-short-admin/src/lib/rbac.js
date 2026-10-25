@@ -17,3 +17,8 @@ export function isSuperAdmin(user) {
 export function isStaff(user) {
   return getAdminRole(user) === 'staff'
 }
+
+export function isCreator(user) {
+  if (!user) return false
+  return user.role === 'creator' || user.admin_role === 'creator'
+}

@@ -29,18 +29,21 @@ class CreatorBase(BaseModel):
     email: Optional[str] = None
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     legal_contract_url: Optional[str] = None
     contract_signed_date: Optional[datetime] = None
     bank_account_name: Optional[str] = None
     bank_account_number: Optional[str] = None
     bank_name: Optional[str] = None
     payment_method: Optional[str] = None
+    mobile_money_number: Optional[str] = None
+    tax_id: Optional[str] = None
     default_revenue_split_pct: float = Field(default=50.0, ge=0, le=100)
     is_active: bool = True
 
 
 class CreatorCreate(CreatorBase):
-    pass
+    password: Optional[str] = None
 
 
 class CreatorUpdate(BaseModel):
@@ -49,12 +52,15 @@ class CreatorUpdate(BaseModel):
     email: Optional[str] = None
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     legal_contract_url: Optional[str] = None
     contract_signed_date: Optional[datetime] = None
     bank_account_name: Optional[str] = None
     bank_account_number: Optional[str] = None
     bank_name: Optional[str] = None
     payment_method: Optional[str] = None
+    mobile_money_number: Optional[str] = None
+    tax_id: Optional[str] = None
     default_revenue_split_pct: Optional[float] = Field(default=None, ge=0, le=100)
     is_active: Optional[bool] = None
 
@@ -62,6 +68,7 @@ class CreatorUpdate(BaseModel):
 class CreatorOut(CreatorBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    user_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -111,10 +118,10 @@ class PayoutOut(BaseModel):
     creator_id: int
     amount_birr: float
     status: str
-    processed_at: Optional[datetime]
-    processed_by_admin_id: Optional[int]
-    notes: Optional[str]
-    reference: Optional[str]
+    processed_at: Optional[datetime] = None
+    processed_by_admin_id: Optional[int] = None
+    notes: Optional[str] = None
+    reference: Optional[str] = None
     created_at: datetime
 
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -19,6 +19,8 @@ from app.models.revenue import (
     RevenueTransaction,
 )
 from app.models.user import User
+from app.models.wallet import Wallet
+from app.security import hash_password
 from app.schemas.revenue import (
     CreatorContentItem,
     CreatorCreate,
@@ -50,8 +52,56 @@ async def create_creator(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Super Admins can configure custom revenue split percentages",
         )
+    password = data.pop("password", None)
     creator = Creator(**data)
     db.add(creator)
+    await db.flush()
+
+    # Link or auto-create User account for creator authentication
+    user = None
+    if creator.email or creator.phone:
+        conds = []
+        if creator.email:
+            conds.append(User.email.ilike(creator.email.strip()))
+        if creator.phone:
+            conds.append(User.phone == creator.phone.strip())
+        res = await db.execute(select(User).where(or_(*conds)))
+        candidates = res.scalars().all()
+        for cand in candidates:
+            c_check = await db.execute(select(Creator.id).where(Creator.user_id == cand.id))
+            if c_check.scalar_one_or_none() is None:
+                user = cand
+                break
+
+    if user is None:
+        base_phone = creator.phone or f"+2519{creator.id:08d}"
+        p_check = await db.execute(select(User.id).where(User.phone == base_phone))
+        if p_check.scalar_one_or_none() is not None:
+            base_phone = f"+2519{creator.id:08d}"
+
+        base_email = creator.email
+        if base_email:
+            e_check = await db.execute(select(User.id).where(User.email.ilike(base_email.strip())))
+            if e_check.scalar_one_or_none() is not None:
+                base_email = None
+
+        user = User(
+            phone=base_phone,
+            email=base_email,
+            password_hash=hash_password(password or "creator123"),
+            display_name=creator.display_name or creator.name,
+            role="creator",
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+        db.add(Wallet(user_id=user.id, balance_birr=0, balance_coins=0))
+
+    if user is not None:
+        if user.role != "super_admin":
+            user.role = "creator"
+        creator.user_id = user.id
+
     await db.commit()
     await db.refresh(creator)
     return creator

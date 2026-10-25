@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AdminLayout } from '../components/layout/AdminLayout'
 import { Login } from '../pages/Login'
+import { ForgotPassword } from '../pages/auth/ForgotPassword'
+import { ResetPassword } from '../pages/auth/ResetPassword'
 import { Dashboard } from '../pages/Dashboard'
 import { NotFound } from '../pages/NotFound'
 import { SeriesList } from '../pages/content/SeriesList'
@@ -29,10 +31,18 @@ import { Transactions } from '../pages/revenue/Transactions'
 import { Reviews } from '../pages/reviews/Reviews'
 import { StaffManagement } from '../pages/staff/StaffManagement'
 import { StaffActivityLog } from '../pages/staff/StaffActivityLog'
+import { CreatorDashboard } from '../pages/creator/CreatorDashboard'
+import { CreatorContent } from '../pages/creator/CreatorContent'
+import { CreatorReviews } from '../pages/creator/CreatorReviews'
+import { CreatorFinancials } from '../pages/creator/CreatorFinancials'
+import { CreatorProfile } from '../pages/creator/CreatorProfile'
 import { SuperAdminRoute } from '../components/layout/SuperAdminRoute'
+import { CreatorRoute } from '../components/layout/CreatorRoute'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/forgot-password', element: <ForgotPassword /> },
+  { path: '/reset-password', element: <ResetPassword /> },
   {
     path: '/',
     element: <AdminLayout />,
@@ -63,6 +73,11 @@ export const router = createBrowserRouter([
       { path: 'analytics/content', element: <SuperAdminRoute><ContentPerformance /></SuperAdminRoute> },
       { path: 'staff', element: <SuperAdminRoute><StaffManagement /></SuperAdminRoute> },
       { path: 'staff/activity', element: <SuperAdminRoute><StaffActivityLog /></SuperAdminRoute> },
+      { path: 'creator/dashboard', element: <CreatorRoute><CreatorDashboard /></CreatorRoute> },
+      { path: 'creator/content', element: <CreatorRoute><CreatorContent /></CreatorRoute> },
+      { path: 'creator/reviews', element: <CreatorRoute><CreatorReviews /></CreatorRoute> },
+      { path: 'creator/financials', element: <CreatorRoute><CreatorFinancials /></CreatorRoute> },
+      { path: 'creator/profile', element: <CreatorRoute><CreatorProfile /></CreatorRoute> },
       { path: 'settings', element: <SuperAdminRoute><SettingsPage /></SuperAdminRoute> },
     ],
   },

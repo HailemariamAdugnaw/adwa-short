@@ -265,6 +265,31 @@ async def seed() -> None:
                 creator = Creator(**cd, is_active=True)
                 db.add(creator)
                 await db.flush()
+
+            # Ensure user account for creator login
+            u_res = await db.execute(
+                select(User).where(
+                    (User.email == cd.get("email")) | (User.phone == cd.get("phone"))
+                )
+            )
+            c_user = u_res.scalar_one_or_none()
+            if c_user is None:
+                c_user = User(
+                    phone=cd.get("phone") or f"+2519{creator.id:08d}",
+                    email=cd.get("email"),
+                    password_hash=hash_password("creator123"),
+                    display_name=cd.get("display_name") or cd["name"],
+                    role="creator",
+                    is_active=True,
+                )
+                db.add(c_user)
+                await db.flush()
+                db.add(Wallet(user_id=c_user.id, balance_birr=0, balance_coins=0))
+
+            if creator.user_id != c_user.id:
+                creator.user_id = c_user.id
+                await db.flush()
+
             creators_list.append(creator)
 
         seeded_series: list[tuple[Series, list[Episode]]] = []

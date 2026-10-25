@@ -164,6 +164,18 @@ export const toggleStaffActive = (id) => api.post(`/admin/staff/${id}/toggle-act
 export const deleteStaff = (id) => api.delete(`/admin/staff/${id}`).then((r) => r.data)
 export const getStaffActivity = (params) => api.get('/admin/staff/activity', { params }).then((r) => r.data)
 
+export const getCreatorPortalDashboard = () => api.get('/creator/dashboard').then((r) => r.data)
+export const getCreatorPortalContent = (params) => api.get('/creator/content', { params }).then((r) => r.data)
+export const getCreatorPortalReviews = (params) => api.get('/creator/reviews', { params }).then((r) => r.data)
+export const getCreatorPortalPayoutAccount = () => api.get('/creator/payout-account').then((r) => r.data)
+export const updateCreatorPortalPayoutAccount = (data) => api.put('/creator/payout-account', data).then((r) => r.data)
+export const getCreatorPortalTransactions = (params) => api.get('/creator/transactions', { params }).then((r) => r.data)
+export const getCreatorPortalProfile = () => api.get('/creator/profile').then((r) => r.data)
+export const updateCreatorPortalProfile = (data) => api.put('/creator/profile', data).then((r) => r.data)
+
+export const forgotPassword = (data) => api.post('/auth/forgot-password', data).then((r) => r.data)
+export const resetPassword = (data) => api.post('/auth/reset-password', data).then((r) => r.data)
+
 export function errMsg(err, fallback = 'Something went wrong') {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data

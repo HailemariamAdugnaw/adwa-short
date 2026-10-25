@@ -30,6 +30,11 @@ const PAGE_TITLES = {
   '/analytics/content': 'Analytics · Content',
   '/staff': 'Administration · Staff Management',
   '/staff/activity': 'Administration · Staff Activity Log',
+  '/creator/dashboard': 'Creator Studio · Overview',
+  '/creator/content': 'Creator Studio · My Content & Analytics',
+  '/creator/reviews': 'Creator Studio · Audience Reviews',
+  '/creator/financials': 'Creator Studio · Financials & Payouts',
+  '/creator/profile': 'Creator Studio · Profile & Contract',
   '/settings': 'Settings',
 }
 

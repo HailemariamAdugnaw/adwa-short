@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getAdminRole, isSuperAdmin, isStaff } from './rbac'
+import { getAdminRole, isSuperAdmin, isStaff, isCreator } from './rbac'
 
 describe('RBAC utilities', () => {
   it('identifies super_admin role from admin_role field', () => {
@@ -7,6 +7,7 @@ describe('RBAC utilities', () => {
     expect(getAdminRole(user)).toBe('super_admin')
     expect(isSuperAdmin(user)).toBe(true)
     expect(isStaff(user)).toBe(false)
+    expect(isCreator(user)).toBe(false)
   })
 
   it('identifies staff role from admin_role field', () => {
@@ -14,6 +15,14 @@ describe('RBAC utilities', () => {
     expect(getAdminRole(user)).toBe('staff')
     expect(isSuperAdmin(user)).toBe(false)
     expect(isStaff(user)).toBe(true)
+    expect(isCreator(user)).toBe(false)
+  })
+
+  it('identifies creator role correctly', () => {
+    const user = { id: 3, role: 'creator' }
+    expect(isCreator(user)).toBe(true)
+    expect(isSuperAdmin(user)).toBe(false)
+    expect(isStaff(user)).toBe(false)
   })
 
   it('defaults legacy role="admin" to super_admin', () => {

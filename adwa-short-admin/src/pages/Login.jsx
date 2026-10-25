@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -36,6 +36,10 @@ export function Login() {
     onSuccess: (data) => {
       login(data)
       toast.success('Welcome back')
+      if (data.role === 'creator') {
+        navigate('/creator/dashboard', { replace: true })
+        return
+      }
       const role = data.admin_role || (data.role === 'admin' ? 'super_admin' : data.role)
       if (role === 'staff') {
         navigate('/content/series', { replace: true })
@@ -95,16 +99,26 @@ export function Login() {
               autoComplete="username"
               required
             />
-            <Input
-              label="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              leftIcon={<Lock className="h-4 w-4" />}
-              autoComplete="current-password"
-              required
-            />
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-text-secondary">Password</span>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-accent hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                leftIcon={<Lock className="h-4 w-4" />}
+                autoComplete="current-password"
+                required
+              />
+            </div>
             <Button
               type="submit"
               fullWidth
@@ -123,10 +137,11 @@ export function Login() {
           </form>
 
           <div className="mt-6 rounded-md border border-border bg-surface-2/60 p-3 text-[11px] leading-relaxed text-text-secondary">
-            <p className="font-semibold text-text-primary">Default admin credentials</p>
-            <p className="mt-1">Phone: <code className="text-accent">+251900000000</code></p>
-            <p>Password: <code className="text-accent">admin123</code></p>
-            <p className="mt-2 text-text-muted">Change immediately after first login.</p>
+            <p className="font-semibold text-text-primary">Demo login credentials</p>
+            <div className="mt-1 space-y-1">
+              <p>Admin: <code className="text-accent">admin@adwashort.com</code> / <code className="text-accent">admin123</code></p>
+              <p>Creator: <code className="text-amber-400">selam@adwashort.com</code> / <code className="text-amber-400">creator123</code></p>
+            </div>
           </div>
         </div>
 

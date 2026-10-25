@@ -38,6 +38,13 @@ class User(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
+    creator_profile: Mapped[Optional["Creator"]] = relationship(
+        "Creator",
+        foreign_keys="[Creator.user_id]",
+        back_populates="user",
+        uselist=False,
+        lazy="selectin",
+    )
 
     @property
     def admin_role(self) -> Optional[str]:
@@ -56,6 +63,10 @@ class User(Base):
     @property
     def is_staff(self) -> bool:
         return self.admin_role in ("staff", "super_admin")
+
+    @property
+    def is_creator(self) -> bool:
+        return self.role == "creator" or self.creator_profile is not None
 
     @property
     def balance_birr(self) -> float:
