@@ -1,6 +1,6 @@
 # ADWA SHORT — Google AdMob Integration & SSV Webhook Guide
 
-This guide details the ad configuration, Google AdMob SDK integration, Server-Side Verification (SSV) callback webhooks, dynamic impression payout attribution, and static fallback economics for the **ADWA SHORT** platform.
+This guide details the ad configuration, Google AdMob SDK integration, Server-Side Verification (SSV) callback webhooks, and strict live payout monitoring for the **ADWA SHORT** platform.
 
 > [!IMPORTANT]
 > **Exclusive Ad Network**: Google AdMob is the sole, exclusive ad provider across the entire ADWA SHORT platform (FastAPI backend, React Admin Dashboard, and Flutter mobile client). All third-party networks (Unity Ads, AppLovin MAX, Custom S2S networks) have been permanently removed.
@@ -14,7 +14,7 @@ Ad monetization in ADWA SHORT operates under a strict platform-retention rule:
 - **100% Platform Revenue**: All revenue generated from rewarded video views, ad impressions, and episode unlocks belongs entirely to **ADWA SHORT**.
 - **0% Creator Revenue**: Content creators earn **0% (0.00 ETB)** from ad-supported episode unlocks. (Creators are monetized exclusively through coin pay-per-view unlocks and prorated subscription / time pass watch-time pools).
 - **Ledger Recording**:
-  - Every completed ad unlock creates a verified `RevenueTransaction` entry:
+  - Every completed ad unlock with verified live payout creates a verified `RevenueTransaction` entry:
     - `source_type = "ad_revenue"`
     - `creator_id = None`
     - `creator_share_birr = 0.0`
@@ -23,19 +23,19 @@ Ad monetization in ADWA SHORT operates under a strict platform-retention rule:
 
 ---
 
-## 2. Dynamic Revenue Logging vs. Static Fallbacks
+## 2. Strict Google AdMob Live Revenue Monitoring
 
-To ensure revenue attribution is transparent and resilient:
+Revenue attribution is governed strictly by live, verified financial data delivered directly from Google AdMob:
 
-1. **Dynamic Revenue Logging (Live Impression Payouts)**:
-   - When Google AdMob SSV postbacks deliver an exact impression payout amount (via `payout_birr`, `revenue_birr`, `payout`, `revenue`, `exact_payout`, or `payout_amount`), the backend records that exact Birr value into `AdUnlockLog.revenue_birr` and credits 100% of it to the platform in `RevenueTransaction`.
-   - The response metadata tag indicates `"revenue_source": "dynamic_payout"`.
+1. **Strict Live Impression Monitoring**:
+   - Payout and revenue tracking for ad-supported views is monitored and recorded **strictly** through verified live data provided by Google AdMob (via server-to-server callbacks/postbacks or SDK impression verification).
+   - When Google AdMob SSV postbacks or verified client callbacks deliver an exact impression payout amount (via `payout_birr`, `revenue_birr`, `payout`, `revenue`, `exact_payout`, or `payout_amount`), the backend records that exact Birr value into `AdUnlockLog.revenue_birr` and credits 100% of it to the platform in `RevenueTransaction`.
+   - The response metadata tag indicates `"revenue_source": "live_admob_payout"`.
 
-2. **Static Fallbacks (When Live Payout Is Absent)**:
-   - When no live payout value is provided in the postback, the system automatically falls back to the configured static default:
-     - `AD_REWARD_VALUE_BIRR` (default: **0.25 ETB** per completed rewarded ad watch).
-     - `AD_ESTIMATED_CPM_BIRR` (default: **250.0 ETB** reference CPM, equivalent to 0.25 ETB per impression).
-   - The response metadata tag indicates `"revenue_source": "static_fallback"`.
+2. **Zero Fallback Policy (No Arbitrary Monetary Crediting)**:
+   - If a live payout value or verified ad impression callback is absent, **no arbitrary static monetary value is credited or logged as revenue**.
+   - The episode unlock completes successfully for the user, but `AdUnlockLog.revenue_birr` is set strictly to `0.00 ETB`, and no artificial `RevenueTransaction` ledger entry is created.
+   - All static fallback configuration variables (`AD_REWARD_VALUE_BIRR`, `AD_ESTIMATED_CPM_BIRR`) and `"revenue_source": "static_fallback"` calculation models have been completely removed.
 
 ---
 
@@ -112,11 +112,9 @@ AD_BANNER_UNIT_ID=ca-app-pub-3940256099942544/6300978111
 AD_NETWORK_API_KEY=adm_live_secret_key_placeholder
 AD_REWARD_CALLBACK_SECRET=adwa_ssv_secret_key_change_in_production
 
-# Ad Reward Thresholds & Static Economics
+# Ad Reward Thresholds
 AD_ADS_REQUIRED=2                         # Number of ads required to unlock an episode
 AD_EPISODES_UNLOCKED=1                    # Episodes unlocked per completed ad batch
-AD_REWARD_VALUE_BIRR=0.25                 # Fallback Birr credited to platform per ad watch
-AD_ESTIMATED_CPM_BIRR=250.0               # Fallback reference CPM in ETB
 ```
 
 ---
@@ -136,7 +134,7 @@ The callback verifier verifies the secret token via:
 
 ### Payload Examples
 
-#### 1. Dynamic Impression Payout (`POST /api/v1/ads/callback`):
+#### 1. Live AdMob Impression Payout (`POST /api/v1/ads/callback`):
 ```json
 {
   "user_id": 42,
@@ -160,12 +158,13 @@ The callback verifier verifies the secret token via:
   "revenue_credited_to_platform_birr": 0.85,
   "platform_share_birr": 0.85,
   "creator_share_birr": 0.0,
-  "revenue_source": "dynamic_payout",
+  "revenue_source": "live_admob_payout",
   "transaction_id": "admob_tx_9876543210"
 }
 ```
 
-#### 2. Static Fallback Postback (`POST /api/v1/ads/postback`):
+#### 2. Live Verification Without Payout Data (`POST /api/v1/ads/postback`):
+When Google AdMob delivers a completion postback without dynamic payout metadata:
 ```json
 {
   "user_id": 42,
@@ -183,14 +182,15 @@ The callback verifier verifies the secret token via:
   "episode_id": 105,
   "user_id": 42,
   "ad_network": "admob",
-  "revenue_birr": 0.25,
-  "revenue_credited_to_platform_birr": 0.25,
-  "platform_share_birr": 0.25,
+  "revenue_birr": 0.0,
+  "revenue_credited_to_platform_birr": 0.0,
+  "platform_share_birr": 0.0,
   "creator_share_birr": 0.0,
-  "revenue_source": "static_fallback",
   "transaction_id": null
 }
 ```
+> [!NOTE]
+> In accordance with strict monitoring policies, when no live payout amount is provided, `revenue_birr` is strictly recorded as `0.00 ETB` and zero artificial financial ledger entries (`RevenueTransaction`) are created. The user's episode unlock remains completely valid.
 
 ---
 
@@ -209,10 +209,9 @@ Super Admins can manage all Google AdMob settings dynamically from the React Adm
    - **Ad Unit Placements**:
      - Rewarded Video Unit ID (`ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX`).
      - Interstitial & Banner Unit IDs.
-   - **Thresholds & Revenue**:
+   - **Thresholds & Live Economics**:
      - Ads Required to Unlock Episode (e.g., 2 ads).
-     - Static Fallback Value per Rewarded Ad (ETB).
-     - Static Fallback Network eCPM (ETB).
+     - Strict Live Monitoring Info Card: Clarifies that ad revenue tracking is powered strictly by verified live data from AdMob callbacks, with zero arbitrary static values credited.
      - Monetization Rule: **100% Platform Revenue (0% Creator Revenue)**.
    - **SSV Webhook & Audit Logs**:
      - Copyable SSV Webhook URL (`/api/v1/ads/callback`).
@@ -248,7 +247,7 @@ flutter test test/continuous_ad_batch_test.dart test/ad_and_loyalty_test.dart
 
 ### C. Manual Verification via cURL
 
-#### 1. Test Dynamic SSV Callback:
+#### 1. Test Live Impression Payout SSV Callback:
 ```bash
 curl -X POST "http://localhost:8000/api/v1/ads/callback" \
   -H "Content-Type: application/json" \
@@ -261,7 +260,7 @@ curl -X POST "http://localhost:8000/api/v1/ads/callback" \
   }'
 ```
 
-#### 2. Test Static Fallback Callback:
+#### 2. Test Live Verification Without Payout (Zero Birr Credited):
 ```bash
 curl -X POST "http://localhost:8000/api/v1/ads/postback" \
   -H "Content-Type: application/json" \

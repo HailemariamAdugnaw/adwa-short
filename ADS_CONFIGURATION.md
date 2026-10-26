@@ -18,9 +18,9 @@ Google AdMob is the sole, exclusive ad network integrated across the ADWA SHORT 
 1. **100% Platform / 0% Creator Attribution**:
    - Ad revenue belongs entirely to ADWA SHORT (`platform_share_birr = gross_amount_birr`, `creator_share_birr = 0.0`).
    - Recorded in `RevenueTransaction` with `source_type = "ad_revenue"` and `creator_id = None`.
-2. **Dynamic Payouts vs. Fallbacks**:
-   - Dynamic payouts delivered via AdMob SSV postbacks are parsed directly into `AdUnlockLog.revenue_birr`.
-   - Missing payout data automatically resolves to `AD_REWARD_VALUE_BIRR` (0.25 ETB default).
+2. **Strict Live Monitoring (Zero Static Fallback Policy)**:
+   - Dynamic payouts delivered via AdMob SSV postbacks are parsed directly into `AdUnlockLog.revenue_birr` and credited to the platform in `RevenueTransaction`.
+   - When live payout data is absent, revenue is strictly `0.00 ETB` and zero artificial financial ledger entries are created. All static fallback variables (`AD_REWARD_VALUE_BIRR`, `AD_ESTIMATED_CPM_BIRR`) have been removed.
 
 ---
 
@@ -36,8 +36,6 @@ Google AdMob is the sole, exclusive ad network integrated across the ADWA SHORT 
 | `AD_INTERSTITIAL_UNIT_ID`| string | `ca-app-pub-3940256099942544/1033173712` | Interstitial Ad Unit ID |
 | `AD_BANNER_UNIT_ID` | string | `ca-app-pub-3940256099942544/6300978111` | Banner Ad Unit ID |
 | `AD_REWARD_CALLBACK_SECRET`| string | `adwa_ssv_secret_key_change_in_production` | Secret token for AdMob SSV authentication |
-| `AD_REWARD_VALUE_BIRR` | float | `0.25` | Static fallback revenue in ETB per rewarded ad |
-| `AD_ESTIMATED_CPM_BIRR` | float | `250.0` | Static fallback reference CPM in ETB |
 | `AD_ADS_REQUIRED` | int | `2` | Number of rewarded ads required to unlock an episode |
 | `AD_EPISODES_UNLOCKED` | int | `1` | Episodes unlocked per completed ad batch |
 
@@ -64,6 +62,9 @@ Secret token verification via `Authorization: Bearer <SECRET>`, `X-Ad-Secret: <S
   "payout_birr": 0.85
 }
 ```
+
+> [!NOTE]
+> If `payout_birr` or live payout parameters are absent, the unlock succeeds with `revenue_birr: 0.00` and zero financial transactions are recorded, upholding the zero static fallback policy.
 
 ---
 

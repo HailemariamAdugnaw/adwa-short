@@ -432,8 +432,6 @@ async def seed() -> None:
                     interstitial_unit_id="ca-app-pub-3940256099942544/1033173712",
                     banner_unit_id="ca-app-pub-3940256099942544/6300978111",
                     callback_secret="adwa_ssv_secret_key_change_in_production",
-                    reward_ad_value_birr=0.25,
-                    estimated_cpm_birr=250.0,
                     test_mode=True,
                 )
             )

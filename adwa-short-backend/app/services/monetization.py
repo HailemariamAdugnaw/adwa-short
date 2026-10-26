@@ -103,8 +103,6 @@ async def _get_ad_rule(db: AsyncSession) -> Optional[AdUnlockRule]:
             rewarded_unit_id=settings.AD_REWARDED_UNIT_ID,
             api_key=settings.AD_NETWORK_API_KEY,
             callback_secret=settings.AD_REWARD_CALLBACK_SECRET,
-            reward_ad_value_birr=settings.AD_REWARD_VALUE_BIRR,
-            estimated_cpm_birr=settings.AD_ESTIMATED_CPM_BIRR,
             test_mode=settings.AD_TEST_MODE,
         )
         db.add(rule)
@@ -233,18 +231,12 @@ async def record_ad_unlock(
     verified_via: str = "client",
     revenue_birr: Optional[float] = None,
 ) -> AdUnlockLog:
-    rule = await _get_ad_rule(db)
-    from app.config import settings
-    val = (
-        revenue_birr
-        if revenue_birr is not None
-        else (float(rule.reward_ad_value_birr) if rule else float(settings.AD_REWARD_VALUE_BIRR))
-    )
+    val = round(float(revenue_birr), 4) if (revenue_birr is not None and revenue_birr > 0) else 0.0
     log = AdUnlockLog(
         user_id=user_id,
         episode_id=episode_id,
         ads_watched=ads_watched,
-        ad_network=ad_network or (rule.provider if rule else "admob"),
+        ad_network=ad_network or "admob",
         verified_via=verified_via,
         revenue_birr=val,
     )

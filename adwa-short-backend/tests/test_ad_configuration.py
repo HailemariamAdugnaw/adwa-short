@@ -42,7 +42,7 @@ async def test_get_and_update_ad_configuration(db_session):
         data = get_res.json()
         assert data["ads_required"] >= 1
         assert "rewarded_unit_id" in data
-        assert "reward_ad_value_birr" in data
+        assert "reward_ad_value_birr" not in data
 
         # 2. Viewer cannot update (403)
         bad_put = await ac.put(
@@ -66,8 +66,6 @@ async def test_get_and_update_ad_configuration(db_session):
                 "callback_secret": "my-secure-s2s-secret-999",
                 "ads_required": 1,
                 "episodes_unlocked": 1,
-                "reward_ad_value_birr": 0.75,
-                "estimated_cpm_birr": 60.0,
                 "test_mode": False,
             },
         )
@@ -75,7 +73,7 @@ async def test_get_and_update_ad_configuration(db_session):
         updated = put_res.json()
         assert updated["provider"] == "admob"
         assert updated["app_id"] == "ca-app-pub-9999999999999999~1111111111"
-        assert updated["reward_ad_value_birr"] == 0.75
+        assert "reward_ad_value_birr" not in updated
         assert updated["ads_required"] == 1
         assert updated["test_mode"] is False
 
@@ -133,17 +131,17 @@ async def test_watched_ad_monetization_100pct_platform_0pct_creator(db_session):
         viewer_token = create_access_token(str(viewer.id), extra={"role": "user"})
         headers = {"Authorization": f"Bearer {viewer_token}"}
 
-        # Watch ad to unlock
+        # Watch ad to unlock with verified live payout from Google AdMob SDK
         res = await ac.post(
             "/ad-unlocks/watched",
             headers=headers,
-            json={"episode_id": episode.id, "ads_watched": 2, "ad_network": "admob"},
+            json={"episode_id": episode.id, "ads_watched": 2, "ad_network": "admob", "revenue_birr": 0.50},
         )
         assert res.status_code == 201, res.text
         unlock_log = res.json()
         assert unlock_log["episode_id"] == episode.id
         assert unlock_log["user_id"] == viewer.id
-        assert unlock_log["revenue_birr"] > 0
+        assert unlock_log["revenue_birr"] == 0.50
 
         # Verify RevenueTransaction in database:
         # 100% of the ad revenue belongs to ADWA SHORT platform, creators earn 0%
@@ -267,12 +265,10 @@ async def test_s2s_reward_callback_webhook(db_session):
                 episodes_unlocked=1,
                 is_active=True,
                 callback_secret="test_secret_123",
-                reward_ad_value_birr=0.60,
             )
             db_session.add(rule)
         else:
             rule.callback_secret = "test_secret_123"
-            rule.reward_ad_value_birr = 0.60
             rule.ads_required = 1
 
         # Create user & episode
@@ -310,13 +306,14 @@ async def test_s2s_reward_callback_webhook(db_session):
         )
         assert bad_cb.status_code == 403
 
-        # 2. Valid secret unlocks episode
+        # 2. Valid secret with live AdMob payout unlocks episode and credits revenue
         good_cb = await ac.post(
             "/ad-unlocks/reward-callback",
             json={
                 "user_id": user.id,
                 "episode_id": ep.id,
                 "secret": "test_secret_123",
+                "payout_birr": 0.60,
             },
         )
         assert good_cb.status_code == 200
@@ -406,11 +403,11 @@ async def test_ad_impression_and_admin_logs(db_session):
 
 
 @pytest.mark.asyncio
-async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
+async def test_api_v1_ads_dynamic_payout_and_strict_monitoring(db_session):
     """
     Validates S2S webhook endpoint (/api/v1/ads/callback & /api/v1/ads/postback):
     1. Dynamic Revenue Logging: When exact payout is sent, records exact amount (100% platform, 0% creator).
-    2. Static Fallbacks: When no payout is sent, falls back to AD_REWARD_VALUE_BIRR (0.25 ETB).
+    2. Strict Live Monitoring: When no payout is sent, no arbitrary static money is credited (0.00 ETB, no static_fallback).
     3. Security: Secure secret verification via headers and params.
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -441,7 +438,7 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
         await db_session.flush()
 
         ep1 = Episode(series_id=series.id, creator_id=creator.id, episode_number=1, title="Dynamic Payout Ep")
-        ep2 = Episode(series_id=series.id, creator_id=creator.id, episode_number=2, title="Static Fallback Ep")
+        ep2 = Episode(series_id=series.id, creator_id=creator.id, episode_number=2, title="Strict Live Monitored Ep")
         viewer = User(
             phone="+251988888887",
             password_hash=hash_password("pass"),
@@ -452,7 +449,7 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
         db_session.add_all([ep1, ep2, viewer])
         await db_session.commit()
 
-        # Configure rule with known secret and default static fallback
+        # Configure rule with known secret
         rule_res = await db_session.execute(select(AdUnlockRule).limit(1))
         rule = rule_res.scalar_one_or_none()
         if rule is None:
@@ -461,14 +458,10 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
                 episodes_unlocked=1,
                 is_active=True,
                 callback_secret="secret_s2s_test_token",
-                reward_ad_value_birr=0.25,
-                estimated_cpm_birr=250.0,
             )
             db_session.add(rule)
         else:
             rule.callback_secret = "secret_s2s_test_token"
-            rule.reward_ad_value_birr = 0.25
-            rule.estimated_cpm_birr = 250.0
             rule.ads_required = 1
         await db_session.commit()
 
@@ -491,7 +484,7 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
         dyn_data = dyn_res.json()
         assert dyn_data["status"] == "success"
         assert dyn_data["revenue_birr"] == 0.85
-        assert dyn_data["revenue_source"] == "dynamic_payout"
+        assert dyn_data["revenue_source"] == "live_admob_payout"
         assert dyn_data["platform_share_birr"] == 0.85
         assert dyn_data["creator_share_birr"] == 0.0
 
@@ -518,8 +511,8 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
         assert tx1.creator_id is None
 
         # ======================================================================
-        # Test Case 2: Static Fallback via /api/v1/ads/postback
-        # No live payout data supplied; should fall back to AD_REWARD_VALUE_BIRR (0.25)
+        # Test Case 2: Strict Live Monitoring via /api/v1/ads/postback
+        # No live payout data supplied; must NOT credit arbitrary static fallback
         # ======================================================================
         static_res = await ac.post(
             "/api/v1/ads/postback",
@@ -528,19 +521,19 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
                 "episode_id": ep2.id,
                 "secret": "secret_s2s_test_token",
                 "ad_network": "admob",
-                "transaction_id": "admob_tx_fallback_2002",
+                "transaction_id": "admob_tx_unpaid_2002",
             },
         )
         assert static_res.status_code == 200, static_res.text
         static_data = static_res.json()
         assert static_data["status"] == "success"
         assert static_data["ad_network"] == "admob"
-        assert static_data["revenue_birr"] == 0.25
-        assert static_data["revenue_source"] == "static_fallback"
-        assert static_data["platform_share_birr"] == 0.25
+        assert static_data["revenue_birr"] == 0.0
+        assert "revenue_source" not in static_data
+        assert static_data["platform_share_birr"] == 0.0
         assert static_data["creator_share_birr"] == 0.0
 
-        # Check RevenueTransaction: 100% platform, 0% creator
+        # Check RevenueTransaction: no monetary revenue credited when payout is absent
         tx2 = (await db_session.execute(
             select(RevenueTransaction).where(
                 RevenueTransaction.source_type == "ad_revenue",
@@ -548,11 +541,7 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
                 RevenueTransaction.user_id == viewer.id,
             )
         )).scalar_one_or_none()
-        assert tx2 is not None
-        assert float(tx2.gross_amount_birr) == 0.25
-        assert float(tx2.platform_share_birr) == 0.25
-        assert float(tx2.creator_share_birr) == 0.0
-        assert tx2.creator_id is None
+        assert tx2 is None
 
         # ======================================================================
         # Test Case 3: GET Callback with query parameters

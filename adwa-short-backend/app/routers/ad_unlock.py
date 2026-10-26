@@ -99,8 +99,6 @@ async def get_rule(db: AsyncSession = Depends(get_db)):
             rewarded_unit_id=settings.AD_REWARDED_UNIT_ID,
             api_key=settings.AD_NETWORK_API_KEY,
             callback_secret=settings.AD_REWARD_CALLBACK_SECRET,
-            reward_ad_value_birr=settings.AD_REWARD_VALUE_BIRR,
-            estimated_cpm_birr=settings.AD_ESTIMATED_CPM_BIRR,
             test_mode=settings.AD_TEST_MODE,
         )
         db.add(rule)
@@ -129,8 +127,6 @@ async def update_rule(
             rewarded_unit_id=settings.AD_REWARDED_UNIT_ID,
             api_key=settings.AD_NETWORK_API_KEY,
             callback_secret=settings.AD_REWARD_CALLBACK_SECRET,
-            reward_ad_value_birr=settings.AD_REWARD_VALUE_BIRR,
-            estimated_cpm_birr=settings.AD_ESTIMATED_CPM_BIRR,
             test_mode=settings.AD_TEST_MODE,
         )
         db.add(rule)
@@ -196,12 +192,14 @@ async def watched_ad(
     if not ad_network:
         ad_network = "admob"
 
-    # Dynamic payout if supplied by client SDK, otherwise static fallback
-    val = float(rule.reward_ad_value_birr if rule and rule.reward_ad_value_birr is not None else settings.AD_REWARD_VALUE_BIRR)
+    # Strict Live Google AdMob Monitoring:
+    # Only record monetary revenue if verified live payout is delivered by the client SDK.
+    # Never credit arbitrary static monetary value.
+    val = 0.0
     if payload.revenue_birr is not None and payload.revenue_birr > 0:
-        val = float(payload.revenue_birr)
+        val = round(float(payload.revenue_birr), 4)
     elif payload.payout is not None and payload.payout > 0:
-        val = float(payload.payout)
+        val = round(float(payload.payout), 4)
 
     # 1. Record unlock log
     log = await record_ad_unlock(
@@ -215,14 +213,16 @@ async def watched_ad(
     )
 
     # 2. Strict Ad Revenue Monetization Rule:
-    # 100% of ad revenue belongs to ADWA SHORT (platform), creators earn 0%
-    revenue_svc = RevenueService(db)
-    await revenue_svc.calculate_ad_revenue(
-        episode_id=payload.episode_id,
-        user_id=user.id,
-        gross_amount_birr=val,
-        reference=f"ad_unlock:ep:{ep.id}:user:{user.id}:ads:{payload.ads_watched}",
-    )
+    # 100% of ad revenue belongs to ADWA SHORT (platform), creators earn 0%.
+    # Only record revenue transaction if a verified live payout was delivered (> 0).
+    if val > 0:
+        revenue_svc = RevenueService(db)
+        await revenue_svc.calculate_ad_revenue(
+            episode_id=payload.episode_id,
+            user_id=user.id,
+            gross_amount_birr=val,
+            reference=f"ad_unlock:ep:{ep.id}:user:{user.id}:ads:{payload.ads_watched}",
+        )
 
     await db.commit()
     await db.refresh(log)
@@ -245,10 +245,10 @@ async def handle_ad_s2s_callback(
     Exclusively handles Google AdMob rewarded video verification and postback events.
 
     Revenue Attribution Logic:
-    1. Dynamic Logging: If an exact payout/revenue is passed in postback body or query params,
+    1. Strict Live Monitoring: If an exact payout/revenue is passed in postback body or query params,
        record that exact amount as platform ad revenue.
-    2. Static Fallback: If no live impression payout is provided, falls back to the configured
-       AD_REWARD_VALUE_BIRR (default 0.25 ETB).
+    2. Zero Static Fallback: If no live impression payout is provided, no arbitrary monetary value
+       is credited or logged as revenue (0.00 ETB).
     3. 100% Platform / 0% Creator Rule: All ad viewing revenue is strictly credited to ADWA SHORT.
     """
     body_data: dict[str, Any] = {}
@@ -394,9 +394,9 @@ async def handle_ad_s2s_callback(
             "user_id": final_user_id,
         }
 
-    # 5. Dynamic Revenue Logging vs. Static Fallbacks:
-    # If webhook postback provides an exact payout value, record that exact amount;
-    # otherwise fall back to AD_REWARD_VALUE_BIRR.
+    # 5. Strict Google AdMob Live Monitoring:
+    # Only record monetary revenue if a verified live payout is sent in the AdMob postback.
+    # Never fall back to static or arbitrary monetary values.
     dynamic_payout = _extract_numeric_payout(combined)
     if payout is not None and payout > 0:
         dynamic_payout = round(payout, 4)
@@ -405,15 +405,10 @@ async def handle_ad_s2s_callback(
 
     if dynamic_payout is not None and dynamic_payout > 0:
         revenue_to_record = dynamic_payout
-        revenue_source = "dynamic_payout"
+        revenue_source = "live_admob_payout"
     else:
-        static_fallback = (
-            float(rule.reward_ad_value_birr)
-            if (rule and rule.reward_ad_value_birr is not None)
-            else float(settings.AD_REWARD_VALUE_BIRR)
-        )
-        revenue_to_record = round(static_fallback, 4)
-        revenue_source = "static_fallback"
+        revenue_to_record = 0.0
+        revenue_source = None
 
     # Google AdMob is the exclusive ad network
     ad_network = "admob"
@@ -437,22 +432,24 @@ async def handle_ad_s2s_callback(
     )
 
     # 7. Strict Ad Revenue Monetization Rule:
-    # 100% of ad revenue belongs to ADWA SHORT (platform), creators earn 0%
-    ref_str = f"ad_s2s:{ad_network}:ep:{final_episode_id}:user:{final_user_id}"
-    if tx_id:
-        ref_str += f":tx:{tx_id}"
+    # 100% of ad revenue belongs to ADWA SHORT (platform), creators earn 0%.
+    # Only record financial revenue ledger if live payout was verified (> 0).
+    if revenue_to_record > 0:
+        ref_str = f"ad_s2s:{ad_network}:ep:{final_episode_id}:user:{final_user_id}"
+        if tx_id:
+            ref_str += f":tx:{tx_id}"
 
-    revenue_svc = RevenueService(db)
-    await revenue_svc.calculate_ad_revenue(
-        episode_id=final_episode_id,
-        user_id=final_user_id,
-        gross_amount_birr=revenue_to_record,
-        reference=ref_str,
-    )
+        revenue_svc = RevenueService(db)
+        await revenue_svc.calculate_ad_revenue(
+            episode_id=final_episode_id,
+            user_id=final_user_id,
+            gross_amount_birr=revenue_to_record,
+            reference=ref_str,
+        )
 
     await db.commit()
 
-    return {
+    res_body = {
         "status": "success",
         "message": "Ad reward verified and episode unlocked successfully",
         "episode_id": final_episode_id,
@@ -462,9 +459,12 @@ async def handle_ad_s2s_callback(
         "revenue_credited_to_platform_birr": revenue_to_record,
         "platform_share_birr": revenue_to_record,
         "creator_share_birr": 0.0,
-        "revenue_source": revenue_source,
         "transaction_id": tx_id,
     }
+    if revenue_source:
+        res_body["revenue_source"] = revenue_source
+
+    return res_body
 
 
 # ==============================================================================
@@ -490,27 +490,21 @@ async def log_ad_impression(
     rule_res = await db.execute(select(AdUnlockRule).limit(1))
     rule = rule_res.scalar_one_or_none()
 
-    rev_val = payload.revenue_birr
-    if rev_val is None or rev_val <= 0:
-        cpm = (
-            float(rule.estimated_cpm_birr)
-            if (rule and rule.estimated_cpm_birr is not None)
-            else float(settings.AD_ESTIMATED_CPM_BIRR)
-        )
-        rev_val = round(cpm / 1000.0, 4)
+    # Strict Live Google AdMob Monitoring: only log monetary revenue if live verified payout provided
+    rev_val = round(float(payload.revenue_birr), 4) if (payload.revenue_birr is not None and payload.revenue_birr > 0) else 0.0
 
     imp = AdImpressionLog(
         user_id=user.id if user else None,
         episode_id=payload.episode_id,
         ad_unit_id=payload.ad_unit_id or (rule.rewarded_unit_id if rule else None),
-        ad_network=payload.ad_network or (rule.provider if rule else "admob"),
+        ad_network="admob",
         ad_type=payload.ad_type,
         revenue_birr=rev_val,
     )
     db.add(imp)
 
-    # Attribute impression revenue 100% to ADWA SHORT platform
-    if payload.episode_id:
+    # Attribute impression revenue 100% to ADWA SHORT platform only if live revenue verified
+    if payload.episode_id and rev_val > 0:
         revenue_svc = RevenueService(db)
         await revenue_svc.calculate_ad_revenue(
             episode_id=payload.episode_id,

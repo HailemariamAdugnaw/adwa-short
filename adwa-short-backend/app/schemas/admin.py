@@ -30,8 +30,6 @@ class AdUnlockRuleOut(BaseModel):
     rewarded_unit_id: Optional[str] = None
     api_key: Optional[str] = None
     callback_secret: Optional[str] = None
-    reward_ad_value_birr: float = 0.25
-    estimated_cpm_birr: float = 250.0
     test_mode: bool = True
     updated_at: datetime
 
@@ -47,8 +45,6 @@ class AdUnlockRuleUpdate(BaseModel):
     rewarded_unit_id: Optional[str] = None
     api_key: Optional[str] = None
     callback_secret: Optional[str] = None
-    reward_ad_value_birr: Optional[float] = None
-    estimated_cpm_birr: Optional[float] = None
     test_mode: Optional[bool] = None
 
 

@@ -101,8 +101,8 @@ class AdUnlockRule {
     this.rewardedUnitId,
     this.interstitialUnitId,
     this.bannerUnitId,
-    this.rewardAdValueBirr = 0.25,
-    this.estimatedCpmBirr = 250.0,
+    this.rewardAdValueBirr = 0.0,
+    this.estimatedCpmBirr = 0.0,
     this.testMode = true,
   });
 
@@ -128,8 +128,8 @@ class AdUnlockRule {
       rewardedUnitId: json['rewarded_unit_id']?.toString(),
       interstitialUnitId: json['interstitial_unit_id']?.toString(),
       bannerUnitId: json['banner_unit_id']?.toString(),
-      rewardAdValueBirr: _asDouble(json['reward_ad_value_birr']) ?? 0.25,
-      estimatedCpmBirr: _asDouble(json['estimated_cpm_birr']) ?? 250.0,
+      rewardAdValueBirr: _asDouble(json['reward_ad_value_birr']) ?? 0.0,
+      estimatedCpmBirr: _asDouble(json['estimated_cpm_birr']) ?? 0.0,
       testMode: json['test_mode'] as bool? ?? true,
     );
   }

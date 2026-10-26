@@ -30,8 +30,6 @@ class Settings(BaseSettings):
     AD_BANNER_UNIT_ID: str = "ca-app-pub-3940256099942544/6300978111"
     AD_NETWORK_API_KEY: str = ""
     AD_REWARD_CALLBACK_SECRET: str = "adwa_ssv_secret_key_change_in_production"
-    AD_REWARD_VALUE_BIRR: float = 0.25
-    AD_ESTIMATED_CPM_BIRR: float = 250.0
     AD_ADS_REQUIRED: int = 2
     AD_EPISODES_UNLOCKED: int = 1
 

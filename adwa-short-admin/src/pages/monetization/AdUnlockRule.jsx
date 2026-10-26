@@ -44,8 +44,6 @@ export function AdUnlockRule() {
     callback_secret: '',
     ads_required: 2,
     episodes_unlocked: 1,
-    reward_ad_value_birr: 0.50,
-    estimated_cpm_birr: 50.0,
     is_active: true,
     test_mode: true,
   })
@@ -62,8 +60,6 @@ export function AdUnlockRule() {
         callback_secret: data.callback_secret || '',
         ads_required: data.ads_required ?? 2,
         episodes_unlocked: data.episodes_unlocked ?? 1,
-        reward_ad_value_birr: data.reward_ad_value_birr ?? 0.50,
-        estimated_cpm_birr: data.estimated_cpm_birr ?? 50.0,
         is_active: data.is_active ?? true,
         test_mode: data.test_mode ?? true,
       })
@@ -340,26 +336,17 @@ export function AdUnlockRule() {
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                label="Static Fallback Value per Rewarded Ad (in Birr)"
-                type="number"
-                step="0.05"
-                min={0}
-                value={form.reward_ad_value_birr}
-                onChange={(e) => setForm((f) => ({ ...f, reward_ad_value_birr: Number(e.target.value) }))}
-                hint="Default fallback credited to ADWA SHORT platform when live impression payout is unavailable (default: 0.25 ETB)"
-              />
-
-              <Input
-                label="Static Fallback Network eCPM (in Birr)"
-                type="number"
-                step="1"
-                min={0}
-                value={form.estimated_cpm_birr}
-                onChange={(e) => setForm((f) => ({ ...f, estimated_cpm_birr: Number(e.target.value) }))}
-                hint="Default fallback effective CPM per 1,000 ad impressions (default: 250.00 ETB)"
-              />
+            {/* Strict Live Google AdMob Monitoring Info */}
+            <div className="rounded-xl border border-border bg-surface-2/40 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                <span className="font-bold text-xs text-text-primary uppercase tracking-wider">
+                  Strict Live Google AdMob Monitoring (Zero Static Fallback)
+                </span>
+              </div>
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Ad revenue is monitored and tracked strictly through verified live payout data provided by Google AdMob (via server-to-server SSV callbacks or SDK impression verification). Static fallback values (<code className="text-accent font-mono text-[11px]">AD_REWARD_VALUE_BIRR</code> / <code className="text-accent font-mono text-[11px]">AD_ESTIMATED_CPM_BIRR</code>) have been removed—if live payout data is absent, ad views are logged with 0.00 ETB revenue to prevent arbitrary ledger balances.
+              </p>
             </div>
 
             {/* Strict Platform Revenue Rule Callout */}
@@ -399,7 +386,7 @@ export function AdUnlockRule() {
                 </Button>
               </div>
               <p className="text-[11px] text-text-muted">
-                Accepts both GET and POST requests (aliases: <code>/api/v1/ads/callback</code>, <code>/api/v1/ads/postback</code>, <code>/ad-unlocks/reward-callback</code>). Delivers real-time impression payouts dynamically, or falls back to static 0.25 ETB.
+                Accepts both GET and POST requests (aliases: <code>/api/v1/ads/callback</code>, <code>/api/v1/ads/postback</code>, <code>/ad-unlocks/reward-callback</code>). Delivers real-time verified Google AdMob impression payouts dynamically.
               </p>
             </div>
 

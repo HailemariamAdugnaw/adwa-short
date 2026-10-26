@@ -120,7 +120,6 @@ class AdService {
     try {
       final epIdNum = int.tryParse(episodeId);
       final adsWatched = rule.adsRequired > 0 ? rule.adsRequired : 1;
-      final totalRevenue = rule.rewardAdValueBirr * adsWatched;
 
       if (_api != null) {
         await _api.post(
@@ -129,7 +128,6 @@ class AdService {
             'episode_id': epIdNum ?? episodeId,
             'ads_watched': adsWatched,
             'ad_network': rule.provider,
-            'revenue_birr': totalRevenue,
           },
           parser: (j) => j,
         );
