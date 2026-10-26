@@ -138,6 +138,9 @@ async def update_rule(
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(rule, k, v)
 
+    # Google AdMob is the sole, exclusive ad network provider
+    rule.provider = "admob"
+
     await db.commit()
     await db.refresh(rule)
     return rule
@@ -238,8 +241,8 @@ async def handle_ad_s2s_callback(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
-    Unified Server-to-Server (S2S) postback/callback webhook handler.
-    Supports GET & POST requests from Google AdMob SSV, Unity Ads, AppLovin MAX, or custom ad servers.
+    Google AdMob Server-Side Verification (SSV) callback webhook handler.
+    Exclusively handles Google AdMob rewarded video verification and postback events.
 
     Revenue Attribution Logic:
     1. Dynamic Logging: If an exact payout/revenue is passed in postback body or query params,
@@ -412,13 +415,8 @@ async def handle_ad_s2s_callback(
         revenue_to_record = round(static_fallback, 4)
         revenue_source = "static_fallback"
 
-    ad_network = (
-        combined.get("ad_network")
-        or combined.get("network")
-        or combined.get("provider")
-        or combined.get("ad_source")
-        or (rule.provider if rule else "admob")
-    )
+    # Google AdMob is the exclusive ad network
+    ad_network = "admob"
     tx_id = (
         combined.get("transaction_id")
         or combined.get("tx_id")

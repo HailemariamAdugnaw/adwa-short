@@ -1,12 +1,274 @@
-# ADWA SHORT — Ad Configuration & S2S Webhook Guide
+# ADWA SHORT — Google AdMob Integration & SSV Webhook Guide
 
-Please refer to the comprehensive [ADS_CONFIGURATION.md](file:///c:/Users/Haile/Documents/adwa-short/ADS_CONFIGURATION.md) for full instructions on configuring ad networks, environment variables, dynamic revenue logging, static fallbacks, and Server-to-Server (S2S) webhooks.
+This guide details the ad configuration, Google AdMob SDK integration, Server-Side Verification (SSV) callback webhooks, dynamic impression payout attribution, and static fallback economics for the **ADWA SHORT** platform.
 
-### Quick Summary of Features:
+> [!IMPORTANT]
+> **Exclusive Ad Network**: Google AdMob is the sole, exclusive ad provider across the entire ADWA SHORT platform (FastAPI backend, React Admin Dashboard, and Flutter mobile client). All third-party networks (Unity Ads, AppLovin MAX, Custom S2S networks) have been permanently removed.
 
-- **Revenue Split**: 100% ADWA SHORT Platform / 0% Content Creator.
-- **Dynamic Logging**: If exact impression payout is sent in S2S webhook (e.g., `payout_birr: 0.85`), logs that exact amount.
-- **Static Fallbacks**: When live data is absent, falls back to `AD_REWARD_VALUE_BIRR` (0.25 ETB) and `AD_ESTIMATED_CPM_BIRR` (250.0 ETB).
-- **S2S Webhook Endpoints**: `POST` / `GET` at `/api/v1/ads/callback` and `/api/v1/ads/postback` (plus `/ad-unlocks/reward-callback`).
-- **Admin UI Route**: `/monetization/ad-unlock` (Super Admin Only).
-- **Pytest Suite**: `pytest tests/test_ad_configuration.py`.
+---
+
+## 1. Monetization & Platform Revenue Rule
+
+Ad monetization in ADWA SHORT operates under a strict platform-retention rule:
+
+- **100% Platform Revenue**: All revenue generated from rewarded video views, ad impressions, and episode unlocks belongs entirely to **ADWA SHORT**.
+- **0% Creator Revenue**: Content creators earn **0% (0.00 ETB)** from ad-supported episode unlocks. (Creators are monetized exclusively through coin pay-per-view unlocks and prorated subscription / time pass watch-time pools).
+- **Ledger Recording**:
+  - Every completed ad unlock creates a verified `RevenueTransaction` entry:
+    - `source_type = "ad_revenue"`
+    - `creator_id = None`
+    - `creator_share_birr = 0.0`
+    - `platform_share_birr = gross_ad_revenue_birr`
+  - In creator analytics and statements, ad views are tallied in the **View by Ad** metric for transparency, but their revenue share strictly remains `0.00 Birr`.
+
+---
+
+## 2. Dynamic Revenue Logging vs. Static Fallbacks
+
+To ensure revenue attribution is transparent and resilient:
+
+1. **Dynamic Revenue Logging (Live Impression Payouts)**:
+   - When Google AdMob SSV postbacks deliver an exact impression payout amount (via `payout_birr`, `revenue_birr`, `payout`, `revenue`, `exact_payout`, or `payout_amount`), the backend records that exact Birr value into `AdUnlockLog.revenue_birr` and credits 100% of it to the platform in `RevenueTransaction`.
+   - The response metadata tag indicates `"revenue_source": "dynamic_payout"`.
+
+2. **Static Fallbacks (When Live Payout Is Absent)**:
+   - When no live payout value is provided in the postback, the system automatically falls back to the configured static default:
+     - `AD_REWARD_VALUE_BIRR` (default: **0.25 ETB** per completed rewarded ad watch).
+     - `AD_ESTIMATED_CPM_BIRR` (default: **250.0 ETB** reference CPM, equivalent to 0.25 ETB per impression).
+   - The response metadata tag indicates `"revenue_source": "static_fallback"`.
+
+---
+
+## 3. Step-by-Step Google AdMob Setup Guide
+
+### Step 1: Create or Sign In to Google AdMob
+1. Navigate to the [Google AdMob Console](https://admob.google.com/).
+2. Sign in with your Google account.
+
+### Step 2: Register Applications
+1. In the AdMob navigation menu, click **Apps** > **Add App**.
+2. Select your platform:
+   - **Android** (configure Google Play details or select "No" during initial development).
+   - **iOS** (configure App Store details or select "No" during initial development).
+3. Copy your unique **AdMob App ID** (format: `ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX`).
+
+### Step 3: Create Rewarded Video Ad Units
+1. Under your registered app, select **Ad units** > **Add ad unit**.
+2. Choose **Rewarded** ad format.
+3. Name your ad unit (e.g., `ADWA_Rewarded_Unlock`).
+4. Set reward details:
+   - **Reward amount**: `1`
+   - **Reward item**: `Episode Unlock`
+
+### Step 4: Configure Server-Side Verification (SSV)
+1. In the Rewarded Ad unit settings, expand **Advanced settings**.
+2. Check the box for **Server-side verification (SSV)**.
+3. Enter your **Callback URL**:
+   ```
+   https://api.yourdomain.com/api/v1/ads/callback
+   ```
+4. Enter your custom **Secret / Token** (this matches `AD_REWARD_CALLBACK_SECRET` in `.env`):
+   ```
+   adwa_ssv_secret_key_change_in_production
+   ```
+5. Save the ad unit and copy the generated **Ad Unit ID** (format: `ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX`).
+
+### Step 5 (Optional): Banner & Interstitial Placements
+If enabling optional banner or interstitial placements, create corresponding ad units in the console and record their Ad Unit IDs.
+
+---
+
+## 4. Google AdMob Official Test Mode IDs
+
+During development and automated testing, enable **Test Mode** (`AD_TEST_MODE=true` in `.env` and in the React Admin panel) to use Google's official test ad units without violating AdMob policies:
+
+| Placement | Platform | Official Google Test Unit ID |
+| :--- | :--- | :--- |
+| **App ID (Sample)** | Android / iOS | `ca-app-pub-3940256099942544~3347511713` |
+| **Rewarded Video** | Android | `ca-app-pub-3940256099942544/5224354917` |
+| **Rewarded Video** | iOS | `ca-app-pub-3940256099942544/1712485313` |
+| **Interstitial** | Android | `ca-app-pub-3940256099942544/1033173712` |
+| **Interstitial** | iOS | `ca-app-pub-3940256099942544/4411468910` |
+| **Banner** | Android | `ca-app-pub-3940256099942544/6300978111` |
+| **Banner** | iOS | `ca-app-pub-3940256099942544/2934735716` |
+
+---
+
+## 5. Environment Variables (.env)
+
+### Backend Configuration (`adwa-short-backend/.env`)
+
+```env
+# ==============================================================================
+# GOOGLE ADMOB & SSV WEBHOOK CONFIGURATION
+# ==============================================================================
+AD_ENABLED=true
+AD_TEST_MODE=true
+AD_NETWORK_PROVIDER=admob
+AD_NETWORK_APP_ID=ca-app-pub-3940256099942544~3347511713
+AD_REWARDED_UNIT_ID=ca-app-pub-3940256099942544/5224354917
+AD_INTERSTITIAL_UNIT_ID=ca-app-pub-3940256099942544/1033173712
+AD_BANNER_UNIT_ID=ca-app-pub-3940256099942544/6300978111
+AD_NETWORK_API_KEY=adm_live_secret_key_placeholder
+AD_REWARD_CALLBACK_SECRET=adwa_ssv_secret_key_change_in_production
+
+# Ad Reward Thresholds & Static Economics
+AD_ADS_REQUIRED=2                         # Number of ads required to unlock an episode
+AD_EPISODES_UNLOCKED=1                    # Episodes unlocked per completed ad batch
+AD_REWARD_VALUE_BIRR=0.25                 # Fallback Birr credited to platform per ad watch
+AD_ESTIMATED_CPM_BIRR=250.0               # Fallback reference CPM in ETB
+```
+
+---
+
+## 6. Server-Side Verification (SSV) Webhook Specification
+
+Google AdMob delivers SSV callbacks to confirm rewarded video completion server-side.
+
+### Webhook Endpoints
+- **Primary Route**: `POST` or `GET /api/v1/ads/callback`
+- **Aliases**: `POST` or `GET /api/v1/ads/postback`, `POST` or `GET /ad-unlocks/reward-callback`
+
+### Security Authentication
+The callback verifier verifies the secret token via:
+- HTTP Header: `X-Ad-Secret: <SECRET>`, `X-Webhook-Secret: <SECRET>`, or `Authorization: Bearer <SECRET>`
+- Query or JSON body parameter: `secret`, `token`, `key`, `verifier`, or `signature`
+
+### Payload Examples
+
+#### 1. Dynamic Impression Payout (`POST /api/v1/ads/callback`):
+```json
+{
+  "user_id": 42,
+  "episode_id": 105,
+  "secret": "adwa_ssv_secret_key_change_in_production",
+  "ad_network": "admob",
+  "transaction_id": "admob_tx_9876543210",
+  "payout_birr": 0.85
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "status": "success",
+  "message": "Ad reward verified and episode unlocked successfully",
+  "episode_id": 105,
+  "user_id": 42,
+  "ad_network": "admob",
+  "revenue_birr": 0.85,
+  "revenue_credited_to_platform_birr": 0.85,
+  "platform_share_birr": 0.85,
+  "creator_share_birr": 0.0,
+  "revenue_source": "dynamic_payout",
+  "transaction_id": "admob_tx_9876543210"
+}
+```
+
+#### 2. Static Fallback Postback (`POST /api/v1/ads/postback`):
+```json
+{
+  "user_id": 42,
+  "episode_id": 105,
+  "secret": "adwa_ssv_secret_key_change_in_production",
+  "ad_network": "admob"
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "status": "success",
+  "message": "Ad reward verified and episode unlocked successfully",
+  "episode_id": 105,
+  "user_id": 42,
+  "ad_network": "admob",
+  "revenue_birr": 0.25,
+  "revenue_credited_to_platform_birr": 0.25,
+  "platform_share_birr": 0.25,
+  "creator_share_birr": 0.0,
+  "revenue_source": "static_fallback",
+  "transaction_id": null
+}
+```
+
+---
+
+## 7. React Admin Dashboard — Ad Management Panel
+
+Super Admins can manage all Google AdMob settings dynamically from the React Admin Dashboard without restarting the FastAPI server:
+
+1. Navigate to: **Super Admin Dashboard > Monetization > Ad Unlock Configuration** (`/monetization/ad-unlock`).
+2. Configuration sections:
+   - **Network & Keys**:
+     - Exclusive Provider Badge: **Google AdMob (Exclusive Network)**.
+     - Google AdMob Application ID (`ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX`).
+     - Server-to-Server Callback Secret.
+     - One-Click Action: **"Load AdMob Test Unit IDs"** to instantly fill official Google sample IDs.
+     - Global Toggles: Enable/Disable Ads, Test Mode toggle.
+   - **Ad Unit Placements**:
+     - Rewarded Video Unit ID (`ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX`).
+     - Interstitial & Banner Unit IDs.
+   - **Thresholds & Revenue**:
+     - Ads Required to Unlock Episode (e.g., 2 ads).
+     - Static Fallback Value per Rewarded Ad (ETB).
+     - Static Fallback Network eCPM (ETB).
+     - Monetization Rule: **100% Platform Revenue (0% Creator Revenue)**.
+   - **SSV Webhook & Audit Logs**:
+     - Copyable SSV Webhook URL (`/api/v1/ads/callback`).
+     - Live audit log table of verified unlocks with timestamps, user IDs, episode titles, and revenue amounts.
+
+---
+
+## 8. Flutter Mobile Client Implementation
+
+The Flutter mobile client integrates the official `google_mobile_ads` SDK:
+
+- **Silent Multi-Ad Batch Queue**: When unlocking an episode requiring $N$ ads, all $N$ ads are preloaded in the background. The moment an ad finishes playing, the next ad in the queue launches programmatically without manual close (X) or next interruptions.
+- **Strict Ad-Load Verification**: If an ad fails to load from AdMob or network is unavailable, the app **never** grants free unlocks. It displays a clean, brand-compliant error card (`"Ad unavailable. Please check your connection or try again later"`) styled in Black, Blood Red, and White, keeping the episode securely locked.
+- **Deferred Verification**: Backend verification (`POST /ad-unlocks/watched`) and reward callbacks are triggered only when the entire batch is completed.
+
+---
+
+## 9. Testing & Verification
+
+### A. Backend Pytest Suite
+Run the ad monetization test suite:
+```bash
+cd adwa-short-backend
+.\venv\Scripts\pytest tests/test_ad_configuration.py -v
+```
+
+### B. Mobile Client Flutter Tests
+Run the continuous multi-ad batch and unlock tests:
+```bash
+cd adwa-short-mobile/adwa_short
+flutter test test/continuous_ad_batch_test.dart test/ad_and_loyalty_test.dart
+```
+
+### C. Manual Verification via cURL
+
+#### 1. Test Dynamic SSV Callback:
+```bash
+curl -X POST "http://localhost:8000/api/v1/ads/callback" \
+  -H "Content-Type: application/json" \
+  -H "X-Ad-Secret: adwa_ssv_secret_key_change_in_production" \
+  -d '{
+    "user_id": 1,
+    "episode_id": 1,
+    "ad_network": "admob",
+    "payout_birr": 0.85
+  }'
+```
+
+#### 2. Test Static Fallback Callback:
+```bash
+curl -X POST "http://localhost:8000/api/v1/ads/postback" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 1,
+    "episode_id": 2,
+    "secret": "adwa_ssv_secret_key_change_in_production",
+    "ad_network": "admob"
+  }'
+```

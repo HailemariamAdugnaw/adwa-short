@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     MAX_DEVICES_PER_ACCOUNT: int = 2
     MAX_UPLOAD_SIZE: int = 2 * 1024 * 1024 * 1024
 
-    # Ad Network Configuration
+    # Ad Network Configuration (Exclusively Google AdMob)
     AD_ENABLED: bool = True
     AD_TEST_MODE: bool = True
     AD_NETWORK_PROVIDER: str = "admob"

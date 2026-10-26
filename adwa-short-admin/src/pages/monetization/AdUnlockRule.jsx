@@ -120,7 +120,7 @@ export function AdUnlockRule() {
             {form.test_mode && <Badge tone="warning">Test Mode</Badge>}
           </div>
           <p className="mt-1 text-xs text-text-secondary">
-            Manage external ad providers (AdMob, Unity, AppLovin), ad unit placements, reward unlock thresholds, and SSV webhooks.
+            Manage Google AdMob integration, ad unit placements, reward unlock thresholds, and SSV webhooks.
           </p>
         </div>
 
@@ -189,25 +189,22 @@ export function AdUnlockRule() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-text-secondary">Ad Network Provider</label>
-                <select
-                  value={form.provider}
-                  onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))}
-                  className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-medium text-text-primary focus:border-accent focus:outline-none"
-                >
-                  <option value="admob">Google AdMob (Recommended)</option>
-                  <option value="unity">Unity Ads</option>
-                  <option value="applovin">AppLovin MAX</option>
-                  <option value="custom">Custom / Direct S2S Network</option>
-                </select>
+                <label className="text-xs font-medium text-text-secondary">Exclusive Ad Network Provider</label>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-medium text-text-primary">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+                    <span className="font-semibold text-text-primary">Google AdMob</span>
+                  </div>
+                  <Badge tone="accent">Exclusive Network</Badge>
+                </div>
               </div>
 
               <Input
-                label="Application ID / Game ID"
+                label="Google AdMob Application ID"
                 value={form.app_id}
                 onChange={(e) => setForm((f) => ({ ...f, app_id: e.target.value }))}
-                placeholder="e.g., ca-app-pub-3940256099942544~3347511713"
-                hint="Your AdMob App ID or Unity Project Game ID"
+                placeholder="ca-app-pub-3940256099942544~3347511713"
+                hint="Your Google AdMob App ID (format: ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX)"
               />
             </div>
 
@@ -227,7 +224,7 @@ export function AdUnlockRule() {
                 value={form.callback_secret}
                 onChange={(e) => setForm((f) => ({ ...f, callback_secret: e.target.value }))}
                 placeholder="adwa_ssv_secret_..."
-                hint="Secret shared with ad network to verify SSV reward callbacks"
+                hint="Secret shared with Google AdMob SSV setup to verify reward callbacks"
               />
             </div>
 
@@ -384,8 +381,8 @@ export function AdUnlockRule() {
           /* Tab 4: S2S Webhook & Live Logs */
           <div className="space-y-6">
             <div className="border-b border-border pb-3">
-              <h3 className="text-sm font-bold text-text-primary">Server-to-Server (SSV) Callback Webhook</h3>
-              <p className="text-xs text-text-muted">Register this URL in Google AdMob or Unity Ads to verify ad completion server-side.</p>
+              <h3 className="text-sm font-bold text-text-primary">Google AdMob Server-Side Verification (SSV) Callback Webhook</h3>
+              <p className="text-xs text-text-muted">Register this URL in Google AdMob Ad Unit settings (Server-Side Verification / SSV) to verify ad completion server-side.</p>
             </div>
 
             <div className="rounded-lg border border-border bg-surface-2 p-4 space-y-2">

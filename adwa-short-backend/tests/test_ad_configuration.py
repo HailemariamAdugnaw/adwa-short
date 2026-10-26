@@ -52,17 +52,17 @@ async def test_get_and_update_ad_configuration(db_session):
         )
         assert bad_put.status_code == 403
 
-        # 3. Admin updates configuration
+        # 3. Admin updates configuration (exclusively Google AdMob)
         put_res = await ac.put(
             "/ad-unlocks/rule",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
-                "provider": "unity",
-                "app_id": "unity-game-id-12345",
-                "rewarded_unit_id": "rewardedVideo_adwa",
-                "interstitial_unit_id": "interstitial_adwa",
-                "banner_unit_id": "banner_adwa",
-                "api_key": "unity-api-key-xyz",
+                "provider": "admob",
+                "app_id": "ca-app-pub-9999999999999999~1111111111",
+                "rewarded_unit_id": "ca-app-pub-9999999999999999/2222222222",
+                "interstitial_unit_id": "ca-app-pub-9999999999999999/3333333333",
+                "banner_unit_id": "ca-app-pub-9999999999999999/4444444444",
+                "api_key": "admob-api-key-xyz",
                 "callback_secret": "my-secure-s2s-secret-999",
                 "ads_required": 1,
                 "episodes_unlocked": 1,
@@ -73,8 +73,8 @@ async def test_get_and_update_ad_configuration(db_session):
         )
         assert put_res.status_code == 200
         updated = put_res.json()
-        assert updated["provider"] == "unity"
-        assert updated["app_id"] == "unity-game-id-12345"
+        assert updated["provider"] == "admob"
+        assert updated["app_id"] == "ca-app-pub-9999999999999999~1111111111"
         assert updated["reward_ad_value_birr"] == 0.75
         assert updated["ads_required"] == 1
         assert updated["test_mode"] is False
@@ -527,13 +527,14 @@ async def test_api_v1_ads_dynamic_payout_and_static_fallback(db_session):
                 "user_id": viewer.id,
                 "episode_id": ep2.id,
                 "secret": "secret_s2s_test_token",
-                "ad_network": "unity",
-                "transaction_id": "unity_tx_fallback_2002",
+                "ad_network": "admob",
+                "transaction_id": "admob_tx_fallback_2002",
             },
         )
         assert static_res.status_code == 200, static_res.text
         static_data = static_res.json()
         assert static_data["status"] == "success"
+        assert static_data["ad_network"] == "admob"
         assert static_data["revenue_birr"] == 0.25
         assert static_data["revenue_source"] == "static_fallback"
         assert static_data["platform_share_birr"] == 0.25
