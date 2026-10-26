@@ -96,6 +96,7 @@ for r in (
     passes.router,
     subscriptions.router,
     ad_unlock.router,
+    ad_unlock.api_v1_ads_router,
     loyalty.router,
     settings_router.router,
     uploads.router,

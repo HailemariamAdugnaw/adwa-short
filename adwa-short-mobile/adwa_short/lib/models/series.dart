@@ -16,6 +16,7 @@ class Series {
     this.isNewRelease = false,
     this.totalEpisodes = 0,
     this.freeEpisodeCount = 0,
+    this.coinCost,
     this.episodes = const [],
     this.cast = const [],
     this.tags = const [],
@@ -41,6 +42,7 @@ class Series {
   final bool isNewRelease;
   final int totalEpisodes;
   final int freeEpisodeCount;
+  final int? coinCost;
   final List<Episode> episodes;
   final List<CastMember> cast;
   final List<String> tags;
@@ -76,12 +78,20 @@ class Series {
     } else {
       castList = const [];
     }
+    final freeCount = _asInt(json['free_episode_count']) ??
+        _asInt(json['free_episodes']) ??
+        _asInt(json['effective_free_episodes']) ??
+        0;
+    final parsedCoinCost = _asInt(json['coin_cost']) ??
+        _asInt(json['coin_price']) ??
+        _asInt(json['effective_coin_cost']);
     final rawEpisodes = json['episodes'];
     List<Episode> episodesList;
     if (rawEpisodes is List) {
       episodesList = rawEpisodes
           .whereType<Map<String, dynamic>>()
-          .map((e) => Episode.fromJson(e))
+          .map((e) => Episode.fromJson(e,
+              defaultFreeCount: freeCount, defaultCoinCost: parsedCoinCost))
           .toList();
     } else {
       episodesList = const [];
@@ -102,7 +112,8 @@ class Series {
       isNewRelease: json['is_new_release'] == true,
       totalEpisodes:
           _asInt(json['total_episodes']) ?? _asInt(json['episode_count']) ?? 0,
-      freeEpisodeCount: _asInt(json['free_episode_count']) ?? 0,
+      freeEpisodeCount: freeCount,
+      coinCost: parsedCoinCost,
       episodes: episodesList,
       cast: castList,
       tags: _parseStringList(json['tags']),
@@ -132,6 +143,7 @@ class Series {
         'is_new_release': isNewRelease,
         'total_episodes': totalEpisodes,
         'free_episode_count': freeEpisodeCount,
+        'coin_cost': coinCost,
         'episodes': episodes.map((e) => e.toJson()).toList(),
         'cast': cast.map((e) => e.toJson()).toList(),
         'tags': tags,
@@ -158,6 +170,7 @@ class Series {
     bool? isNewRelease,
     int? totalEpisodes,
     int? freeEpisodeCount,
+    int? coinCost,
     List<Episode>? episodes,
     List<CastMember>? cast,
     List<String>? tags,
@@ -183,6 +196,7 @@ class Series {
         isNewRelease: isNewRelease ?? this.isNewRelease,
         totalEpisodes: totalEpisodes ?? this.totalEpisodes,
         freeEpisodeCount: freeEpisodeCount ?? this.freeEpisodeCount,
+        coinCost: coinCost ?? this.coinCost,
         episodes: episodes ?? this.episodes,
         cast: cast ?? this.cast,
         tags: tags ?? this.tags,

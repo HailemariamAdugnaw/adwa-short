@@ -57,11 +57,15 @@ class _AdwaButtonState extends State<AdwaButton> {
                 Icon(widget.icon, color: palette.foreground, size: fontSize + 4),
                 const SizedBox(width: 8),
               ],
-              Text(
-                widget.label,
-                style: AppTextStyles.button.copyWith(
-                  color: palette.foreground,
-                  fontSize: fontSize,
+              Flexible(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.button.copyWith(
+                    color: palette.foreground,
+                    fontSize: fontSize,
+                  ),
                 ),
               ),
               if (widget.iconRight != null) ...[

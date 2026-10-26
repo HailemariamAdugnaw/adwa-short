@@ -128,10 +128,14 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   }
 
   bool _isLocked(Episode ep) {
+    if (ep.isFree) return false;
+    if (ep.isAccessible == true) return false;
+    if (ep.accessible) return false;
+    if (ep.effectivelyAccessible) return false;
+    final freeCount = _series?.freeEpisodeCount ?? 0;
+    if (ep.number > 0 && ep.number <= freeCount) return false;
     if (ep.isLocked) return true;
     if (ep.isAccessible == false) return true;
-    if (ep.isFree || ep.accessible || ep.effectivelyAccessible) return false;
-    final freeCount = _series?.freeEpisodeCount ?? 0;
     return ep.number > freeCount;
   }
 

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/network/api_client.dart';
 import 'core/network/token_manager.dart';
+import 'core/services/ad_service.dart';
 import 'core/utils/device_id.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/repositories/auth_repository.dart';
@@ -35,6 +37,13 @@ Future<void> main() async {
     await dotenv.load(fileName: '.env');
   } catch (_) {
 
+  }
+
+  // Initialize Google Mobile Ads SDK for rewarded ads
+  try {
+    await MobileAds.instance.initialize();
+  } catch (e) {
+    debugPrint('Google Mobile Ads initialization warning: $e');
   }
 
   final prefs = await SharedPreferences.getInstance();
@@ -78,6 +87,7 @@ class AdwaShortAppRoot extends StatelessWidget {
         Provider<ApiClient>.value(value: apiClient),
         Provider<TokenManager>.value(value: tokenManager),
         Provider<AuthRepository>.value(value: authRepository),
+        Provider<AdService>(create: (_) => AdService(apiClient)),
         ChangeNotifierProvider<AuthProvider>(
           create: (_) => AuthProvider(authRepository),
         ),

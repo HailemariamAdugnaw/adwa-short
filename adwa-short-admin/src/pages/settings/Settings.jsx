@@ -34,9 +34,9 @@ const SECTIONS = [
   },
   {
     id: 'content',
-    title: 'Content & Reviews',
+    title: 'Content & Episodes',
     icon: FileText,
-    keys: ['free_trial_default_episodes'],
+    keys: ['free_trial_default_episodes', 'default_episode_coin_cost'],
   },
   {
     id: 'revenue',
@@ -57,6 +57,7 @@ const RESERVED_KEYS = SECTIONS.flatMap((s) => s.keys)
 const LABELS = {
   max_devices_per_account: 'Max Devices Per Account',
   free_trial_default_episodes: 'Free Trial Episodes',
+  default_episode_coin_cost: 'Default Episode Coin Cost',
   coin_price_birr: 'Coin Price (Birr)',
   maintenance_mode: 'Maintenance Mode',
   default_creator_split_pct: 'Default Creator Split (%)',
@@ -65,6 +66,7 @@ const LABELS = {
 const HINTS = {
   max_devices_per_account: 'Standard = 2, Family = 4',
   free_trial_default_episodes: 'Episodes free for new users without subscription',
+  default_episode_coin_cost: 'Default coins required to unlock an episode when not set per episode',
   coin_price_birr: 'Price of a single coin in Birr. Used by walk-in deposits to auto-credit coins.',
   maintenance_mode: 'Blocks mobile app access for non-admin users',
   default_creator_split_pct: 'Default percentage creators receive from revenue (0–100)',

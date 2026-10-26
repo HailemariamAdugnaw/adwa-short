@@ -15,12 +15,16 @@ class LoyaltyProvider extends ChangeNotifier {
   LoyaltyStatus _status = LoyaltyStatus.idle;
   List<LoyaltyGrant> _grants = [];
   AdUnlockRule? _rule;
+  LoyaltyUserStatus? _loyaltyStatus;
   String? _errorMessage;
+  bool _isClaiming = false;
 
   LoyaltyStatus get status => _status;
   List<LoyaltyGrant> get grants => _grants;
   AdUnlockRule? get rule => _rule;
+  LoyaltyUserStatus? get loyaltyStatus => _loyaltyStatus;
   String? get errorMessage => _errorMessage;
+  bool get isClaiming => _isClaiming;
 
   Future<void> load() async {
     _status = LoyaltyStatus.loading;
@@ -51,9 +55,19 @@ class LoyaltyProvider extends ChangeNotifier {
               ? AdUnlockRule.fromJson(json)
               : AdUnlockRule.fromJson({}),
         ),
+        _api.get<LoyaltyUserStatus?>(
+          ApiConstants.loyaltyStatus,
+          parser: (json) => json is Map<String, dynamic>
+              ? LoyaltyUserStatus.fromJson(json)
+              : null,
+        ).catchError((_) => null),
       ]);
+
       _grants = results[0] as List<LoyaltyGrant>;
       _rule = results[1] as AdUnlockRule;
+      if (results[2] is LoyaltyUserStatus) {
+        _loyaltyStatus = results[2] as LoyaltyUserStatus;
+      }
       _status = LoyaltyStatus.success;
       _errorMessage = null;
     } on ApiException catch (e) {
@@ -64,5 +78,44 @@ class LoyaltyProvider extends ChangeNotifier {
       _status = LoyaltyStatus.error;
     }
     notifyListeners();
+  }
+
+  /// Claims available Super Admin configured loyalty tier perks (coins + access).
+  /// Strictly blocks duplicate claims if already claimed or ineligible.
+  Future<bool> claimLoyaltyReward() async {
+    if (_loyaltyStatus != null && (_loyaltyStatus!.isClaimed || !_loyaltyStatus!.canClaim)) {
+      _errorMessage = 'You have already claimed this loyalty reward. Each reward can only be claimed once.';
+      notifyListeners();
+      return false;
+    }
+    _isClaiming = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _api.post(
+        ApiConstants.loyaltyClaim,
+        body: {},
+        parser: (j) => j,
+      );
+      if (_loyaltyStatus != null) {
+        _loyaltyStatus = _loyaltyStatus!.copyWith(
+          isClaimed: true,
+          canClaim: false,
+        );
+      }
+      await load();
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('Failed to claim loyalty reward: $e');
+      if (e is ApiException) {
+        _errorMessage = e.message;
+      } else {
+        _errorMessage = e.toString();
+      }
+      return false;
+    } finally {
+      _isClaiming = false;
+      notifyListeners();
+    }
   }
 }

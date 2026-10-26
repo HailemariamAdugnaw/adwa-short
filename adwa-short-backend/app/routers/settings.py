@@ -46,6 +46,7 @@ async def public_settings(db: AsyncSession = Depends(get_db)):
         coin_price_birr=_to_float(sd.get("coin_price_birr", "1.0"), 1.0),
         ad_unlock_ads_required=int(rule.ads_required) if rule else 2,
         ad_unlock_episodes_unlocked=int(rule.episodes_unlocked) if rule else 1,
+        default_episode_coin_cost=_to_int(sd.get("default_episode_coin_cost", "10"), 10),
     )
 
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CategoryBase(BaseModel):
@@ -72,6 +72,16 @@ class EpisodeOut(EpisodeBase):
     published_at: Optional[datetime] = None
     view_count: int
     created_at: datetime
+    is_free: bool = False
+    is_locked: bool = True
+    is_accessible: bool = False
+    effective_coin_cost: Optional[int] = None
+
+
+class EpisodeUnlockOut(EpisodeOut):
+    coins_deducted: int = 0
+    new_balance_coins: int = 0
+    message: str = "Episode unlocked successfully"
 
 
 class SeriesBase(BaseModel):
@@ -85,12 +95,28 @@ class SeriesBase(BaseModel):
     is_vip: bool = False
     is_exclusive: bool = False
     is_published: bool = False
-    free_episode_count: int = 3
+    free_episode_count: Optional[int] = None
+    free_episodes: Optional[int] = None
+    effective_free_episodes: Optional[int] = 3
+    coin_cost: Optional[int] = None
+    effective_coin_cost: Optional[int] = 10
     total_episodes: int = 0
     director: Optional[str] = None
     cast: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
     intro_bumper_url: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_free_episodes(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            val = data.get("free_episodes") if data.get("free_episodes") is not None else data.get("free_episode_count")
+            if val is not None:
+                data["free_episode_count"] = val
+                data["free_episodes"] = val
+            if data.get("effective_free_episodes") is None:
+                data["effective_free_episodes"] = val if val is not None else 3
+        return data
 
 
 class SeriesCreate(SeriesBase):
@@ -109,6 +135,8 @@ class SeriesUpdate(BaseModel):
     is_exclusive: Optional[bool] = None
     is_published: Optional[bool] = None
     free_episode_count: Optional[int] = None
+    free_episodes: Optional[int] = None
+    coin_cost: Optional[int] = None
     total_episodes: Optional[int] = None
     director: Optional[str] = None
     cast: Optional[List[str]] = None
@@ -123,10 +151,25 @@ class SeriesUpdate(BaseModel):
     is_most_searched: Optional[bool] = None
     is_most_viral: Optional[bool] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_free_episodes_update(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            val = data.get("free_episodes") if data.get("free_episodes") is not None else data.get("free_episode_count")
+            if val is not None:
+                data["free_episode_count"] = val
+                data["free_episodes"] = val
+        return data
+
 
 class SeriesOut(SeriesBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    free_episode_count: Optional[int] = None
+    free_episodes: Optional[int] = None
+    effective_free_episodes: int = 3
+    coin_cost: Optional[int] = None
+    effective_coin_cost: int = 10
     is_hot: bool
     is_new_release: bool
     is_most_seen: bool

@@ -27,3 +27,4 @@ class PublicSettings(BaseModel):
     coin_price_birr: float
     ad_unlock_ads_required: int
     ad_unlock_episodes_unlocked: int
+    default_episode_coin_cost: int = 10

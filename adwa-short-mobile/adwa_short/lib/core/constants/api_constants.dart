@@ -42,12 +42,17 @@ class ApiConstants {
   static const String subscriptionsSubscribe = '/subscriptions/subscribe';
   static const String adUnlocksRule = '/ad-unlocks/rule';
   static const String adUnlocksWatched = '/ad-unlocks/watched';
+  static const String adsS2sCallback = '/api/v1/ads/callback';
   static String episodeAccessCheck(String id) => '/episodes/$id/access';
 
   static const String downloadTokens = '/downloads/tokens';
   static const String downloadFile = '/downloads/file';
 
   static const String loyaltyMyGrants = '/loyalty/my-grants';
+  static const String loyaltyConfig = '/loyalty/config';
+  static const String loyaltyStatus = '/loyalty/status';
+  static const String loyaltyClaim = '/loyalty/claim';
+  static const String loyaltyAdBonus = '/loyalty/ad-bonus';
   static const String devices = '/devices';
   static String deviceById(String id) => '/devices/$id';
 
@@ -62,6 +67,7 @@ class ApiConstants {
   static String reviewById(String id) => '/reviews/$id';
   static const String adminReviews = '/admin/reviews';
   static const String appSettings = '/settings';
+  static const String publicSettings = '/settings/public';
 
   static const String storageAccessToken = 'adwa_access_token';
   static const String storageRefreshToken = 'adwa_refresh_token';

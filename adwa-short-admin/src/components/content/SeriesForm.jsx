@@ -26,7 +26,8 @@ export function SeriesForm({ initial, onSaved, onCancel }) {
     creator_id: '',
     is_vip: false,
     is_exclusive: false,
-    free_episode_count: 0,
+    free_episode_count: '',
+    coin_cost: '',
     director: '',
     cast: [],
     tags: [],
@@ -48,7 +49,8 @@ export function SeriesForm({ initial, onSaved, onCancel }) {
       creator_id: initial.creator_id ?? '',
       is_vip: !!initial.is_vip,
       is_exclusive: !!initial.is_exclusive,
-      free_episode_count: initial.free_episode_count ?? 0,
+      free_episode_count: initial.free_episode_count !== undefined && initial.free_episode_count !== null ? initial.free_episode_count : (initial.free_episodes !== undefined && initial.free_episodes !== null ? initial.free_episodes : ''),
+      coin_cost: initial.coin_cost !== undefined && initial.coin_cost !== null ? initial.coin_cost : '',
       director: initial.director ?? '',
       cast: initial.cast ?? [],
       tags: initial.tags ?? [],
@@ -105,6 +107,9 @@ export function SeriesForm({ initial, onSaved, onCancel }) {
       type: 'series',
       total_episodes: 0,
       creator_id: form.creator_id ? Number(form.creator_id) : undefined,
+      free_episode_count: form.free_episode_count !== '' && form.free_episode_count != null ? Number(form.free_episode_count) : null,
+      free_episodes: form.free_episode_count !== '' && form.free_episode_count != null ? Number(form.free_episode_count) : null,
+      coin_cost: form.coin_cost !== '' && form.coin_cost != null ? Number(form.coin_cost) : null,
       cast: castStr
         .split(',')
         .map((s) => s.trim())
@@ -247,12 +252,22 @@ export function SeriesForm({ initial, onSaved, onCancel }) {
             />
           </label>
           <Input
-            label="Free Episodes"
+            label="Free Episodes (Override)"
             type="number"
             min={0}
             value={form.free_episode_count}
-            onChange={(e) => setForm((f) => ({ ...f, free_episode_count: Number(e.target.value) }))}
-            hint="Episodes free without subscription"
+            onChange={(e) => setForm((f) => ({ ...f, free_episode_count: e.target.value === '' ? '' : Number(e.target.value) }))}
+            placeholder="Inherit global default"
+            hint="Leave blank to inherit Super Admin default (or enter 0 to lock all)"
+          />
+          <Input
+            label="Episode Coin Cost (Override)"
+            type="number"
+            min={1}
+            value={form.coin_cost}
+            onChange={(e) => setForm((f) => ({ ...f, coin_cost: e.target.value === '' ? '' : Number(e.target.value) }))}
+            placeholder="Inherit global default"
+            hint="Leave blank to inherit global default (or enter custom cost like 15)"
           />
           <Input
             label="Director"

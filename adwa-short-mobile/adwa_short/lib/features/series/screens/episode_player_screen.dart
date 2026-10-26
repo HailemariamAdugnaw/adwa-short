@@ -7,10 +7,13 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/token_manager.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
+import '../../../core/widgets/adwa_button.dart';
 import '../../../core/widgets/unified_video_player.dart';
 import '../../../features/downloads/providers/download_provider.dart';
+import '../../../features/profile/providers/wallet_provider.dart';
 import '../../../features/ratings/providers/rating_provider.dart';
 import '../../../features/reviews/providers/review_provider.dart';
 import '../../../features/reviews/widgets/review_bottom_sheet.dart';
@@ -281,6 +284,10 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       ratingCount: _currentEpisode.ratingCount,
       thumbnailUrl: _currentEpisode.thumbnailUrl,
       isSaved: _isSaved,
+      coinCost: context.read<SeriesProvider>().resolveCoinCost(
+        episode: _currentEpisode,
+        series: widget.series,
+      ),
     );
   }
 
@@ -346,6 +353,169 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
     );
   }
 
+  Future<void> _checkAccessAndPlay() async {
+    final provider = context.read<SeriesProvider>();
+    await provider.refreshAfterUnlock();
+    if (!mounted) return;
+    final updatedSeries = provider.series;
+    if (updatedSeries != null) {
+      final updatedList = _getEpisodes(updatedSeries);
+      for (final ep in updatedList) {
+        if (ep.id == _currentEpisode.id) {
+          setState(() {
+            _currentEpisode = ep;
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  Future<void> _handleCoinUnlock(BuildContext innerContext) async {
+    final walletProvider = innerContext.read<WalletProvider>();
+    final seriesProvider = innerContext.read<SeriesProvider>();
+
+    if (walletProvider.wallet == null) {
+      await walletProvider.loadWallet();
+    }
+
+    final currentCoins = walletProvider.wallet?.balanceCoins.toInt() ?? 0;
+    final requiredCoins = seriesProvider.resolveCoinCost(
+      episode: _currentEpisode,
+      series: widget.series,
+    );
+
+    if (!innerContext.mounted) return;
+
+    if (currentCoins < requiredCoins) {
+      await showDialog<void>(
+        context: innerContext,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.monetization_on_outlined, color: AppColors.bloodRed, size: 24),
+              const SizedBox(width: 8),
+              Text('Insufficient Coins', style: AppTextStyles.h3),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You need $requiredCoins coins to unlock Episode ${_currentEpisode.number}.',
+                style: AppTextStyles.body1,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Current Balance: $currentCoins coins\nNeeded: ${requiredCoins - currentCoins} more coins',
+                style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Cancel', style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary)),
+            ),
+            AdwaButton(
+              label: 'Buy Coins',
+              size: AdwaButtonSize.sm,
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(innerContext).pushNamed(AppRoutes.coinStore).then((_) {
+                  walletProvider.loadWallet(refresh: true);
+                });
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // User has sufficient coins: show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: innerContext,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.lock_open_rounded, color: AppColors.bloodRed, size: 24),
+            const SizedBox(width: 8),
+            Text('Unlock Episode', style: AppTextStyles.h3),
+          ],
+        ),
+        content: Text(
+          'Unlock Episode ${_currentEpisode.number} for $requiredCoins coins?\n\n'
+          'Current Balance: $currentCoins coins\n'
+          'Balance After: ${currentCoins - requiredCoins} coins',
+          style: AppTextStyles.body2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary)),
+          ),
+          AdwaButton(
+            label: 'Unlock ($requiredCoins Coins)',
+            size: AdwaButtonSize.sm,
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !innerContext.mounted) return;
+
+    final res = await seriesProvider.unlockWithCoinsDetailed(
+      episodeId: _currentEpisode.id,
+      coinCost: requiredCoins,
+    );
+
+    if (res.success && innerContext.mounted) {
+      if (res.newBalanceCoins != null) {
+        walletProvider.setCoinBalance(res.newBalanceCoins!);
+      } else {
+        walletProvider.deductCoins(res.coinsDeducted);
+      }
+
+      Navigator.of(innerContext).maybePop(); // dismiss paywall
+
+      setState(() {
+        _currentEpisode = _currentEpisode.copyWith(
+          isFree: false,
+          isLocked: false,
+          accessible: true,
+          isAccessible: true,
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.message ?? 'Episode ${_currentEpisode.number} unlocked! ${res.coinsDeducted} coins deducted.',
+            style: AppTextStyles.body3.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.surfaceElevated,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      _checkAccessAndPlay();
+    } else if (innerContext.mounted) {
+      ScaffoldMessenger.of(innerContext).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to unlock episode with coins. Please try again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   void _showPaywall() {
     if (!mounted) return;
     final item = _toShortItem();
@@ -359,8 +529,19 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
               children: [
                 PaywallOverlay(
                   item: item,
-                  onBuyCoins: () => Navigator.of(innerContext)
-                      .pushNamed(AppRoutes.coinStore),
+                  onUnlockAds: () async {
+                    final adService = innerContext.read<AdService>();
+                    final ok = await adService.showRewardedAd(
+                      innerContext,
+                      episodeId: _currentEpisode.id,
+                      episodeTitle: 'Episode ${_currentEpisode.number} · ${_currentEpisode.title}',
+                    );
+                    if (ok && innerContext.mounted) {
+                      Navigator.of(innerContext).maybePop();
+                      _checkAccessAndPlay();
+                    }
+                  },
+                  onBuyCoins: () => _handleCoinUnlock(innerContext),
                   onBuyPass: () => Navigator.of(innerContext)
                       .pushNamed(AppRoutes.passes),
                   onSubscribe: () => Navigator.of(innerContext)
@@ -443,8 +624,18 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
             onSearch: () => Navigator.of(context).pushNamed(AppRoutes.search),
             onReviews: _openReviews,
             isLocked: !ep.effectivelyAccessible,
-            onUnlockCoins: () =>
-                Navigator.of(context).pushNamed(AppRoutes.coinStore),
+            onUnlockAds: () async {
+              final adService = context.read<AdService>();
+              final ok = await adService.showRewardedAd(
+                context,
+                episodeId: ep.id,
+                episodeTitle: 'Episode ${ep.number} · ${ep.title}',
+              );
+              if (ok && mounted) {
+                _checkAccessAndPlay();
+              }
+            },
+            onUnlockCoins: () => _handleCoinUnlock(context),
             onUnlockPass: () =>
                 Navigator.of(context).pushNamed(AppRoutes.passes),
             onUnlockSubscribe: () =>

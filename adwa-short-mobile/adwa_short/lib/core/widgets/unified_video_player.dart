@@ -37,6 +37,7 @@ class UnifiedVideoPlayer extends StatefulWidget {
     this.onSearch,
     this.onReviews,
     this.isLocked = false,
+    this.onUnlockAds,
     this.onUnlockCoins,
     this.onUnlockPass,
     this.onUnlockSubscribe,
@@ -54,6 +55,7 @@ class UnifiedVideoPlayer extends StatefulWidget {
     this.onDownload,
     this.downloadStatus = DownloadStatus.idle,
     this.isDownloaded = false,
+    this.coinCost = 10,
   });
 
   final String videoUrl;
@@ -73,6 +75,7 @@ class UnifiedVideoPlayer extends StatefulWidget {
   final VoidCallback? onSearch;
   final VoidCallback? onReviews;
   final bool isLocked;
+  final VoidCallback? onUnlockAds;
   final VoidCallback? onUnlockCoins;
   final VoidCallback? onUnlockPass;
   final VoidCallback? onUnlockSubscribe;
@@ -90,6 +93,7 @@ class UnifiedVideoPlayer extends StatefulWidget {
   final VoidCallback? onDownload;
   final DownloadStatus downloadStatus;
   final bool isDownloaded;
+  final int coinCost;
 
   @override
   State<UnifiedVideoPlayer> createState() => _UnifiedVideoPlayerState();
@@ -565,6 +569,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       durationSeconds: _effectiveDuration.inSeconds > 0
           ? _effectiveDuration.inSeconds
           : widget.knownDuration.inSeconds,
+      coinCost: widget.coinCost,
     );
   }
 
@@ -998,6 +1003,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       backgroundColor: AppColors.black,
       body: PaywallOverlay(
         item: _toShortItem(),
+        onUnlockAds: widget.onUnlockAds,
         onBuyCoins: widget.onUnlockCoins,
         onBuyPass: widget.onUnlockPass,
         onSubscribe: widget.onUnlockSubscribe,

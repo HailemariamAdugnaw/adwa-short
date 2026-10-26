@@ -25,7 +25,7 @@ from app.models.subscription import (
     Subscription,
 )
 from app.models.loyalty import LoyaltyRewardConfig, LoyaltyRewardGrant
-from app.models.ad_unlock import AdUnlockRule, AdUnlockLog
+from app.models.ad_unlock import AdUnlockRule, AdUnlockLog, AdImpressionLog
 from app.models.settings import AppSettings
 from app.models.admin import AdminUser, ManualCashDeposit, AuditLog
 from app.models.revenue import (

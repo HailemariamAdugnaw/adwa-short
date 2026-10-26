@@ -23,6 +23,16 @@ class AdUnlockRuleOut(BaseModel):
     ads_required: int
     episodes_unlocked: int
     is_active: bool
+    provider: str = "admob"
+    app_id: Optional[str] = None
+    banner_unit_id: Optional[str] = None
+    interstitial_unit_id: Optional[str] = None
+    rewarded_unit_id: Optional[str] = None
+    api_key: Optional[str] = None
+    callback_secret: Optional[str] = None
+    reward_ad_value_birr: float = 0.25
+    estimated_cpm_birr: float = 250.0
+    test_mode: bool = True
     updated_at: datetime
 
 
@@ -30,11 +40,38 @@ class AdUnlockRuleUpdate(BaseModel):
     ads_required: Optional[int] = None
     episodes_unlocked: Optional[int] = None
     is_active: Optional[bool] = None
+    provider: Optional[str] = None
+    app_id: Optional[str] = None
+    banner_unit_id: Optional[str] = None
+    interstitial_unit_id: Optional[str] = None
+    rewarded_unit_id: Optional[str] = None
+    api_key: Optional[str] = None
+    callback_secret: Optional[str] = None
+    reward_ad_value_birr: Optional[float] = None
+    estimated_cpm_birr: Optional[float] = None
+    test_mode: Optional[bool] = None
 
 
 class AdUnlockLogCreate(BaseModel):
     episode_id: int
-    ads_watched: int = Field(ge=1)
+    ads_watched: int = Field(default=2, ge=1)
+    ad_network: Optional[str] = "admob"
+    revenue_birr: Optional[float] = None
+    payout: Optional[float] = None
+
+
+class AdWebhookPostbackResponse(BaseModel):
+    status: str
+    message: str
+    episode_id: Optional[int] = None
+    user_id: Optional[int] = None
+    ad_network: Optional[str] = None
+    revenue_birr: Optional[float] = None
+    revenue_credited_to_platform_birr: Optional[float] = None
+    platform_share_birr: Optional[float] = None
+    creator_share_birr: float = 0.0
+    revenue_source: Optional[str] = None
+    transaction_id: Optional[str] = None
 
 
 class AdUnlockLogOut(BaseModel):
@@ -43,7 +80,42 @@ class AdUnlockLogOut(BaseModel):
     user_id: int
     episode_id: int
     ads_watched: int
+    revenue_birr: float = 0.0
+    ad_network: Optional[str] = None
+    verified_via: str = "client"
     unlocked_at: datetime
+    user_display_name: Optional[str] = None
+    episode_title: Optional[str] = None
+    series_title: Optional[str] = None
+
+
+class AdImpressionCreate(BaseModel):
+    episode_id: Optional[int] = None
+    ad_unit_id: Optional[str] = None
+    ad_network: str = "admob"
+    ad_type: str = "rewarded"
+    revenue_birr: Optional[float] = None
+
+
+class AdImpressionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: Optional[int] = None
+    episode_id: Optional[int] = None
+    ad_unit_id: Optional[str] = None
+    ad_network: str
+    ad_type: str
+    revenue_birr: float
+    created_at: datetime
+
+
+class AdRewardCallbackPayload(BaseModel):
+    user_id: int
+    episode_id: int
+    secret: Optional[str] = None
+    token: Optional[str] = None
+    reward_amount: Optional[int] = None
+    network: Optional[str] = "admob"
 
 
 class AnalyticsOverview(BaseModel):

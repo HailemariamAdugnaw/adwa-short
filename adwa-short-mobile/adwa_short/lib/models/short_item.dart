@@ -19,6 +19,7 @@ class ShortItem {
     this.ratingCount,
     this.thumbnailUrl,
     this.durationSeconds = 0,
+    this.coinCost = 10,
   });
 
   final String id;
@@ -40,6 +41,7 @@ class ShortItem {
   final int? ratingCount;
   final String? thumbnailUrl;
   final int durationSeconds;
+  final int coinCost;
 
   bool get isLocked => !isAccessible;
 
@@ -99,6 +101,7 @@ class ShortItem {
       durationSeconds: _asInt(json['duration_seconds']) ??
           _asInt(json['duration']) ??
           0,
+      coinCost: _asInt(json['coin_cost']) ?? 10,
     );
   }
 
@@ -122,6 +125,7 @@ class ShortItem {
         'rating_count': ratingCount,
         'thumbnail_url': thumbnailUrl,
         'duration_seconds': durationSeconds,
+        'coin_cost': coinCost,
       };
 
   ShortItem copyWith({
@@ -144,6 +148,7 @@ class ShortItem {
     int? ratingCount,
     String? thumbnailUrl,
     int? durationSeconds,
+    int? coinCost,
   }) =>
       ShortItem(
         id: id ?? this.id,
@@ -165,6 +170,7 @@ class ShortItem {
         ratingCount: ratingCount ?? this.ratingCount,
         thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
         durationSeconds: durationSeconds ?? this.durationSeconds,
+        coinCost: coinCost ?? this.coinCost,
       );
 }
 

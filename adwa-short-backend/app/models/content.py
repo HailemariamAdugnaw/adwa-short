@@ -51,7 +51,8 @@ class Series(Base):
     is_exclusive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
-    free_episode_count: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    free_episode_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    coin_cost: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     total_episodes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     director: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

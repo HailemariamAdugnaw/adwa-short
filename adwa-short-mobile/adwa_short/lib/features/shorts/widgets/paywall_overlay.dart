@@ -13,6 +13,7 @@ class PaywallOverlay extends StatelessWidget {
   const PaywallOverlay({
     super.key,
     required this.item,
+    this.onUnlockAds,
     this.onBuyCoins,
     this.onBuyPass,
     this.onSubscribe,
@@ -20,6 +21,7 @@ class PaywallOverlay extends StatelessWidget {
   });
 
   final ShortItem item;
+  final VoidCallback? onUnlockAds;
   final VoidCallback? onBuyCoins;
   final VoidCallback? onBuyPass;
   final VoidCallback? onSubscribe;
@@ -51,50 +53,80 @@ class PaywallOverlay extends StatelessWidget {
         Positioned.fill(
           child: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Center(
                     child: Container(
-                      width: 72,
-                      height: 72,
+                      width: 76,
+                      height: 76,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: AppColors.bloodRed.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                         border: Border.all(
-                            color: AppColors.bloodRed, width: 1.6),
+                          color: AppColors.bloodRed,
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.bloodRed.withValues(alpha: 0.35),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                          ),
+                        ],
                       ),
-                      child: const Icon(Icons.lock_rounded,
-                          color: AppColors.bloodRed, size: 36),
+                      child: const Icon(
+                        Icons.lock_rounded,
+                        color: AppColors.white,
+                        size: 36,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'This episode is locked',
+                    'This Episode is Locked',
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.h2,
+                    style: AppTextStyles.h2.copyWith(
+                      color: AppColors.white,
+                      letterSpacing: 0.3,
+                    ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(
                     _episodeInfo(),
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.body2,
+                    style: AppTextStyles.body1.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _reasonText(),
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 24),
+                  if (onUnlockAds != null) ...[
+                    AdwaButton(
+                      label: 'Unlock via Ads (Watch Ad)',
+                      icon: Icons.play_circle_outline_rounded,
+                      onPressed: onUnlockAds,
+                      expanded: true,
+                      size: AdwaButtonSize.md,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   AdwaButton(
-                    label: 'Unlock with Coins',
+                    label: 'Unlock with Coins (${item.coinCost > 0 ? item.coinCost : 10} Coins)',
                     icon: Icons.monetization_on_rounded,
                     onPressed: onBuyCoins,
                     expanded: true,
+                    variant: onUnlockAds != null ? AdwaButtonVariant.secondary : AdwaButtonVariant.primary,
                     size: AdwaButtonSize.md,
                   ),
                   const SizedBox(height: 10),

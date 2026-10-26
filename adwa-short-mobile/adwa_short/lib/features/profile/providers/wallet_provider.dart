@@ -45,6 +45,23 @@ class WalletProvider extends ChangeNotifier {
   String? get passesError => _passesError;
   String? get subsError => _subsError;
 
+  void deductCoins(int coins) {
+    if (_wallet != null) {
+      final newCoins = (_wallet!.balanceCoins - coins).clamp(0, 99999999);
+      _wallet = _wallet!.copyWith(balanceCoins: newCoins);
+      notifyListeners();
+    }
+  }
+
+  void setCoinBalance(int newBalance) {
+    if (_wallet != null) {
+      _wallet = _wallet!.copyWith(balanceCoins: newBalance);
+    } else {
+      _wallet = Wallet(balanceBirr: 0, balanceCoins: newBalance);
+    }
+    notifyListeners();
+  }
+
   Future<void> loadWallet({bool refresh = false}) async {
     _walletStatus = refresh ? WalletLoadStatus.refreshing : WalletLoadStatus.loading;
     notifyListeners();

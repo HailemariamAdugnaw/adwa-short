@@ -52,11 +52,23 @@ class Episode {
   bool get effectivelyAccessible =>
       isAccessible ?? (isFree || accessible || !isLocked);
 
-  factory Episode.fromJson(Map<String, dynamic> json) {
+  factory Episode.fromJson(Map<String, dynamic> json, {int? defaultFreeCount, int? defaultCoinCost}) {
+    final epNum = _asInt(json['number']) ?? _asInt(json['episode_number']) ?? 0;
+    final bool rawIsFree = json['is_free'] == true ||
+        (defaultFreeCount != null && defaultFreeCount > 0 && epNum > 0 && epNum <= defaultFreeCount);
+    final bool? apiAccessible = json['is_accessible'] is bool
+        ? json['is_accessible'] as bool
+        : null;
+    final bool isAcc = apiAccessible ?? (rawIsFree || json['accessible'] == true);
+    final bool rawIsLocked = json['is_locked'] is bool
+        ? json['is_locked'] as bool
+        : (!rawIsFree && !isAcc);
+    final parsedCoin = _asInt(json['coin_cost']) ?? _asInt(json['effective_coin_cost']);
+
     return Episode(
       id: json['id']?.toString() ?? '',
       seriesId: json['series_id']?.toString() ?? '',
-      number: _asInt(json['number']) ?? _asInt(json['episode_number']) ?? 0,
+      number: epNum,
       title: json['title']?.toString() ?? 'Episode',
       description: json['description']?.toString() ?? '',
       thumbnailUrl:
@@ -69,15 +81,13 @@ class Episode {
           json['url']?.toString(),
       durationSeconds:
           _asInt(json['duration_seconds']) ?? _asInt(json['duration']) ?? 0,
-      isFree: json['is_free'] == true,
-      isLocked: json['is_locked'] == true,
-      accessible: json['accessible'] == true,
-      isAccessible: json['is_accessible'] is bool
-          ? json['is_accessible'] as bool
-          : null,
+      isFree: rawIsFree,
+      isLocked: rawIsLocked,
+      accessible: json['accessible'] == true || isAcc,
+      isAccessible: apiAccessible ?? isAcc,
       accessReason: json['access_reason']?.toString(),
       creatorId: _asInt(json['creator_id']),
-      coinCost: _asInt(json['coin_cost']),
+      coinCost: (parsedCoin != null && parsedCoin > 0) ? parsedCoin : (defaultCoinCost ?? 10),
       viewsCount:
           _asInt(json['views_count']) ?? _asInt(json['view_count']) ?? 0,
       likesCount:

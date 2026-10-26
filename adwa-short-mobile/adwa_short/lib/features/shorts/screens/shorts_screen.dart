@@ -3,12 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
+import '../../../core/widgets/adwa_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
+import '../../../features/profile/providers/wallet_provider.dart';
 import '../../../features/reviews/widgets/review_bottom_sheet.dart';
+import '../../../features/series/providers/series_provider.dart';
 import '../../../models/episode.dart';
 import '../../../models/series.dart';
 import '../../../models/short_item.dart';
@@ -69,10 +73,137 @@ class _ShortsScreenState extends State<ShortsScreen> {
     }
   }
 
-  Future<void> _openCoins() async {
-    await Navigator.of(context).pushNamed(AppRoutes.coinStore);
+  Future<void> _handleCoinUnlock(ShortItem item, int index) async {
+    final walletProvider = context.read<WalletProvider>();
+    final seriesProvider = context.read<SeriesProvider>();
+    final shortsProvider = context.read<ShortsProvider>();
+
+    if (walletProvider.wallet == null) {
+      await walletProvider.loadWallet();
+    }
+
+    final currentCoins = walletProvider.wallet?.balanceCoins.toInt() ?? 0;
+    final requiredCoins = item.coinCost > 0 ? item.coinCost : 10;
+    final epId = item.episodeId ?? item.id;
+
     if (!mounted) return;
-    await _refreshAfterPayment();
+
+    if (currentCoins < requiredCoins) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.monetization_on_outlined, color: AppColors.bloodRed, size: 24),
+              const SizedBox(width: 8),
+              Text('Insufficient Coins', style: AppTextStyles.h3),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You need $requiredCoins coins to unlock ${item.title}.',
+                style: AppTextStyles.body1,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Current Balance: $currentCoins coins\nNeeded: ${requiredCoins - currentCoins} more coins',
+                style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Cancel', style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary)),
+            ),
+            AdwaButton(
+              label: 'Buy Coins',
+              size: AdwaButtonSize.sm,
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).pushNamed(AppRoutes.coinStore).then((_) {
+                  walletProvider.loadWallet(refresh: true);
+                });
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.lock_open_rounded, color: AppColors.bloodRed, size: 24),
+            const SizedBox(width: 8),
+            Text('Unlock Episode', style: AppTextStyles.h3),
+          ],
+        ),
+        content: Text(
+          'Unlock ${item.title} for $requiredCoins coins?\n\n'
+          'Current Balance: $currentCoins coins\n'
+          'Balance After: ${currentCoins - requiredCoins} coins',
+          style: AppTextStyles.body2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary)),
+          ),
+          AdwaButton(
+            label: 'Unlock ($requiredCoins Coins)',
+            size: AdwaButtonSize.sm,
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final res = await seriesProvider.unlockWithCoinsDetailed(
+      episodeId: epId,
+      coinCost: requiredCoins,
+    );
+
+    if (res.success && mounted) {
+      if (res.newBalanceCoins != null) {
+        walletProvider.setCoinBalance(res.newBalanceCoins!);
+      } else {
+        walletProvider.deductCoins(res.coinsDeducted);
+      }
+
+      shortsProvider.markAccessible(index);
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.message ?? '${item.title} unlocked! ${res.coinsDeducted} coins deducted.',
+            style: AppTextStyles.body3.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.surfaceElevated,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to unlock episode with coins. Please try again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _openPasses() async {
@@ -233,7 +364,19 @@ class _ShortsScreenState extends State<ShortsScreen> {
           onShare: () => _showShareToast(item),
           onSearch: _openSearch,
           onWatchFull: () => _watchFull(item),
-          onBuyCoins: _openCoins,
+          onUnlockAds: () async {
+            final adService = context.read<AdService>();
+            final ok = await adService.showRewardedAd(
+              context,
+              episodeId: item.episodeId ?? item.id,
+              episodeTitle: item.title,
+            );
+            if (ok && mounted) {
+              p.markAccessible(i);
+              setState(() {});
+            }
+          },
+          onBuyCoins: () => _handleCoinUnlock(item, i),
           onBuyPass: _openPasses,
           onSubscribe: _openSubscriptions,
           onMaybeLater: () {

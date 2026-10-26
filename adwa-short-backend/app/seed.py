@@ -34,6 +34,7 @@ DEFAULT_SETTINGS = [
     ("support_phone", "+251900000000", "Customer support phone number"),
     ("min_payout_birr", "50", "Minimum deposit amount"),
     ("default_creator_split_pct", "50", "Default revenue split percentage for new creators"),
+    ("default_episode_coin_cost", "10", "Default coin cost to unlock an episode when not set per episode"),
 ]
 
 CATEGORIES = [
@@ -420,7 +421,22 @@ async def seed() -> None:
 
         res = await db.execute(select(AdUnlockRule).limit(1))
         if res.scalar_one_or_none() is None:
-            db.add(AdUnlockRule(ads_required=2, episodes_unlocked=1, is_active=True))
+            db.add(
+                AdUnlockRule(
+                    ads_required=2,
+                    episodes_unlocked=1,
+                    is_active=True,
+                    provider="admob",
+                    app_id="ca-app-pub-3940256099942544~3347511713",
+                    rewarded_unit_id="ca-app-pub-3940256099942544/5224354917",
+                    interstitial_unit_id="ca-app-pub-3940256099942544/1033173712",
+                    banner_unit_id="ca-app-pub-3940256099942544/6300978111",
+                    callback_secret="adwa_ssv_secret_key_change_in_production",
+                    reward_ad_value_birr=0.25,
+                    estimated_cpm_birr=250.0,
+                    test_mode=True,
+                )
+            )
 
         res = await db.execute(select(LoyaltyRewardConfig).limit(1))
         if res.scalar_one_or_none() is None:

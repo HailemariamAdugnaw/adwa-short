@@ -36,6 +36,7 @@ import {
   getCreatorPortalPayoutAccount,
   getCreatorPortalTransactions,
   getCreatorPortalProfile,
+  getAdUnlockLogs,
   errMsg,
 } from './api'
 import { useAuthStore } from './store'
@@ -177,6 +178,13 @@ export function useAdUnlockRule() {
   return useQuery({
     queryKey: ['ad-unlock-rule'],
     queryFn: () => get('/ad-unlocks/rule'),
+  })
+}
+
+export function useAdUnlockLogs(params) {
+  return useQuery({
+    queryKey: ['ad-unlock-logs', params],
+    queryFn: () => getAdUnlockLogs(params),
   })
 }
 

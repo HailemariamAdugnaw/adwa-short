@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../core/widgets/tag_chip.dart';
+import '../../../features/profile/providers/wallet_provider.dart';
 import '../../../features/ratings/providers/rating_provider.dart';
 import '../../../features/reviews/providers/review_provider.dart';
 import '../../../features/reviews/widgets/review_bottom_sheet.dart';
@@ -89,24 +91,37 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         episode: episode,
         accessCheck: check,
         onWatchAd: () async {
-          final required = check.adsRequired > 0 ? check.adsRequired : 1;
-          for (var i = 1; i <= required; i++) {
-            await Future.delayed(const Duration(milliseconds: 800));
-          }
-          final ok = await provider.recordAdWatched(
+          final adService = context.read<AdService>();
+          final ok = await adService.showRewardedAd(
+            context,
             episodeId: episode.id,
-            adsWatched: required,
+            episodeTitle: 'Episode ${episode.number} · ${episode.title}',
           );
-          if (ok) await provider.refreshAfterUnlock();
+          if (ok) {
+            await provider.refreshAfterUnlock();
+            if (mounted) {
+              widget.onPlayEpisode?.call(series, episode);
+            }
+          }
           return ok;
         },
         onPayWithCoins: () async {
-          final ok = await provider.purchaseWithCoins(
+          final walletProvider = context.read<WalletProvider>();
+          final cost = check.coinCost ?? episode.coinCost ?? 10;
+          final res = await provider.unlockWithCoinsDetailed(
             episodeId: episode.id,
-            coinCost: check.coinCost ?? episode.coinCost ?? 1,
+            coinCost: cost,
           );
-          if (ok) await provider.refreshAfterUnlock();
-          return ok;
+          if (res.success) {
+            if (res.newBalanceCoins != null) {
+              walletProvider.setCoinBalance(res.newBalanceCoins!);
+            } else {
+              walletProvider.deductCoins(res.coinsDeducted);
+            }
+            await provider.refreshAfterUnlock();
+            return true;
+          }
+          return false;
         },
         onBuyPass: widget.onOpenPasses,
         onSubscribe: widget.onOpenSubscriptions,

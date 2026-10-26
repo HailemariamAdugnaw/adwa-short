@@ -5,14 +5,68 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_admin, get_current_user, get_optional_user
+from app.deps import get_current_admin, get_current_user, get_optional_user, get_settings_dict
 from app.models.content import Episode, Series
 from app.models.user import User
-from app.schemas.content import EpisodeCreate, EpisodeOut, EpisodeUpdate
-from app.services.monetization import AccessDenied, resolve_access
+from app.models.wallet import Wallet
+from app.schemas.content import EpisodeCreate, EpisodeOut, EpisodeUnlockOut, EpisodeUpdate
+from app.services.monetization import (
+    AccessDenied,
+    get_effective_coin_cost,
+    get_effective_free_episodes,
+    resolve_access,
+)
 from app.services.audit import log_activity
 
 router = APIRouter(prefix="/episodes", tags=["episodes"])
+
+
+async def _enrich_episode_out(
+    db: AsyncSession,
+    ep: Episode,
+    series: Series | None,
+    user: User | None,
+) -> EpisodeOut:
+    if series is None:
+        sres = await db.execute(select(Series).where(Series.id == ep.series_id))
+        series = sres.scalar_one_or_none()
+
+    is_free = False
+    is_locked = True
+    is_accessible = False
+
+    if series is not None:
+        effective_free = await get_effective_free_episodes(db, series)
+        if ep.episode_number <= effective_free:
+            is_free = True
+            is_locked = False
+            is_accessible = True
+        else:
+            is_free = False
+            if user is not None:
+                try:
+                    await resolve_access(db, user, ep, series, deduct_coins=False)
+                    is_locked = False
+                    is_accessible = True
+                except AccessDenied:
+                    is_locked = True
+                    is_accessible = False
+            else:
+                is_locked = True
+                is_accessible = False
+
+    effective_coin_cost = 10
+    if series is not None:
+        effective_coin_cost = await get_effective_coin_cost(db, series, ep)
+
+    data = EpisodeOut.model_validate(ep).model_dump()
+    data["is_free"] = is_free
+    data["is_locked"] = is_locked
+    data["is_accessible"] = is_accessible
+    data["effective_coin_cost"] = effective_coin_cost
+    if data.get("coin_cost") is None or data.get("coin_cost") == 0:
+        data["coin_cost"] = effective_coin_cost
+    return EpisodeOut(**data)
 
 
 @router.get("", response_model=list[EpisodeOut])
@@ -34,7 +88,20 @@ async def list_episodes(
         stmt = stmt.where(Episode.is_published.is_(True))
     stmt = stmt.order_by(Episode.created_at.desc()).limit(limit).offset(offset)
     res = await db.execute(stmt)
-    return list(res.scalars().all())
+    raw_eps = list(res.scalars().all())
+
+    series_map: dict[int, Series] = {}
+    if series_id is not None:
+        sres = await db.execute(select(Series).where(Series.id == series_id))
+        s_obj = sres.scalar_one_or_none()
+        if s_obj is not None:
+            series_map[series_id] = s_obj
+
+    out: list[EpisodeOut] = []
+    for ep in raw_eps:
+        s = series_map.get(ep.series_id)
+        out.append(await _enrich_episode_out(db, ep, s, user))
+    return out
 
 
 @router.get("/{episode_id}", response_model=EpisodeOut)
@@ -50,7 +117,7 @@ async def get_episode(
     is_admin = user is not None and user.role == "admin"
     if not ep.is_published and not is_admin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    return ep
+    return await _enrich_episode_out(db, ep, None, user)
 
 
 @router.get("/{episode_id}/access")
@@ -150,7 +217,7 @@ async def delete_episode(
     await db.commit()
 
 
-@router.post("/{episode_id}/unlock", response_model=EpisodeOut)
+@router.post("/{episode_id}/unlock", response_model=EpisodeUnlockOut)
 async def unlock_with_coins(
     episode_id: int,
     db: AsyncSession = Depends(get_db),
@@ -164,9 +231,30 @@ async def unlock_with_coins(
     series = sres.scalar_one_or_none()
     if series is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+
+    wres_before = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
+    wallet_before = wres_before.scalar_one_or_none()
+    bal_before = wallet_before.balance_coins if wallet_before else 0
+
     try:
         await resolve_access(db, user, ep, series, deduct_coins=True)
     except AccessDenied as e:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=e.reason.value)
     await db.commit()
-    return ep
+
+    wres_after = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
+    wallet_after = wres_after.scalar_one_or_none()
+    bal_after = wallet_after.balance_coins if wallet_after else 0
+    coins_deducted = max(0, bal_before - bal_after)
+
+    ep_data = EpisodeOut.model_validate(ep).model_dump()
+    ep_data["is_free"] = False
+    ep_data["is_locked"] = False
+    ep_data["is_accessible"] = True
+
+    return EpisodeUnlockOut(
+        **ep_data,
+        coins_deducted=coins_deducted,
+        new_balance_coins=bal_after,
+        message=f"Episode #{ep.episode_number} unlocked successfully. {coins_deducted} coins deducted.",
+    )

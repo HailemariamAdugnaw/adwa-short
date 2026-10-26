@@ -176,6 +176,10 @@ export const updateCreatorPortalProfile = (data) => api.put('/creator/profile', 
 export const forgotPassword = (data) => api.post('/auth/forgot-password', data).then((r) => r.data)
 export const resetPassword = (data) => api.post('/auth/reset-password', data).then((r) => r.data)
 
+export const getAdUnlockRule = () => api.get('/ad-unlocks/rule').then((r) => r.data)
+export const updateAdUnlockRule = (data) => api.put('/ad-unlocks/rule', data).then((r) => r.data)
+export const getAdUnlockLogs = (params) => api.get('/ad-unlocks/logs', { params }).then((r) => r.data)
+
 export function errMsg(err, fallback = 'Something went wrong') {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data

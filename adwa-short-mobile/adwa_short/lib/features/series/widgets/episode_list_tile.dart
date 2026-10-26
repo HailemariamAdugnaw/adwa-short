@@ -22,7 +22,7 @@ class EpisodeListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLocked = !episode.isFree && !episode.accessible;
+    final isLocked = !episode.effectivelyAccessible;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -103,14 +103,19 @@ class EpisodeListTile extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: AppColors.success.withValues(alpha: 0.2),
+                              color: AppColors.bloodRed.withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: AppColors.bloodRed,
+                                width: 0.6,
+                              ),
                             ),
                             child: Text(
                               'FREE',
                               style: AppTextStyles.overline.copyWith(
-                                color: AppColors.success,
+                                color: AppColors.bloodRedBright,
                                 fontSize: 9,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),

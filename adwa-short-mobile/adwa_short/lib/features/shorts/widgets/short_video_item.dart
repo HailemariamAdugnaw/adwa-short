@@ -17,6 +17,7 @@ class ShortVideoItem extends StatelessWidget {
     this.onShare,
     this.onSearch,
     this.onWatchFull,
+    this.onUnlockAds,
     this.onBuyCoins,
     this.onBuyPass,
     this.onSubscribe,
@@ -34,6 +35,7 @@ class ShortVideoItem extends StatelessWidget {
   final VoidCallback? onShare;
   final VoidCallback? onSearch;
   final VoidCallback? onWatchFull;
+  final VoidCallback? onUnlockAds;
   final VoidCallback? onBuyCoins;
   final VoidCallback? onBuyPass;
   final VoidCallback? onSubscribe;
@@ -59,6 +61,8 @@ class ShortVideoItem extends StatelessWidget {
       onWatchFull: onWatchFull,
       onSearch: onSearch,
       isLocked: !isAccessible,
+      coinCost: item.coinCost,
+      onUnlockAds: onUnlockAds,
       onUnlockCoins: onBuyCoins,
       onUnlockPass: onBuyPass,
       onUnlockSubscribe: onSubscribe,

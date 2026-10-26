@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, Numeric, func
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, Numeric, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,8 +24,12 @@ class LoyaltyRewardConfig(Base):
 
 class LoyaltyRewardGrant(Base):
     __tablename__ = "loyalty_reward_grants"
+    __table_args__ = (
+        UniqueConstraint("user_id", "reward_id", name="uq_user_loyalty_reward"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reward_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loyalty_reward_configs.id", ondelete="CASCADE"), nullable=True, index=True)
     details: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

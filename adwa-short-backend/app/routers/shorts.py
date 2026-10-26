@@ -9,7 +9,12 @@ from app.deps import get_optional_user
 from app.models.content import Episode, Series
 from app.models.user import User
 from app.schemas.content import ShortsFeedItem
-from app.services.monetization import AccessDenied, AccessResult, resolve_access
+from app.services.monetization import (
+    AccessDenied,
+    AccessResult,
+    get_effective_coin_cost,
+    resolve_access,
+)
 
 router = APIRouter(prefix="/shorts", tags=["shorts"])
 
@@ -58,7 +63,7 @@ async def _build_item(
         episode_number=ep.episode_number,
         total_episodes=series.total_episodes,
         view_count=ep.view_count,
-        coin_cost=ep.coin_cost,
+        coin_cost=await get_effective_coin_cost(db, series, ep),
         is_short=ep.is_short,
         is_accessible=is_accessible,
         access_reason=access_reason,
