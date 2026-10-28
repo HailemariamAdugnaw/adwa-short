@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
+import '../../../providers/app_state_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../providers/wallet_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -222,8 +225,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (confirmed != true) return;
         await context.read<AuthProvider>().logout();
         if (!mounted) return;
+        context.read<AppStateProvider>().setUser(null);
+        context.read<WalletProvider>().reset();
         Navigator.of(context)
-            .pushNamedAndRemoveUntil('/login', (_) => false);
+            .pushNamedAndRemoveUntil(AppRoutes.welcome, (_) => false);
       },
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );

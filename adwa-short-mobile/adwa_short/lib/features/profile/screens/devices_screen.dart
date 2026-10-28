@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/adwa_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/device.dart';
 import '../../../models/wallet.dart';
 import '../../../providers/app_state_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/device_provider.dart';
 
 class DevicesScreen extends StatefulWidget {
@@ -20,12 +23,23 @@ class DevicesScreen extends StatefulWidget {
 }
 
 class _DevicesScreenState extends State<DevicesScreen> {
+  bool _isAuth(BuildContext context, {bool listen = false}) {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: listen);
+      return auth.isAuthenticated;
+    } catch (_) {
+      return true;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DeviceProvider>().load();
+      if (_isAuth(context, listen: false)) {
+        context.read<DeviceProvider>().load();
+      }
     });
   }
 
@@ -73,10 +87,20 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAuth = _isAuth(context, listen: true);
+    if (!isAuth) {
+      return Scaffold(
+        backgroundColor: AppColors.black,
+        appBar: AppBar(title: const Text('My Devices')),
+        body: SafeArea(child: _guestView(context)),
+      );
+    }
+
     final p = context.watch<DeviceProvider>();
     final appState = context.watch<AppStateProvider>();
     final wallet = appState.user?.wallet;
     final paidTier = _isPaidTier(wallet);
+
     return Scaffold(
       backgroundColor: AppColors.black,
       appBar: AppBar(title: const Text('My Devices')),
@@ -88,7 +112,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
             children: [
               _tierBanner(paidTier),
               switch (p.status) {
-                DeviceStatus.idle || DeviceStatus.loading => _skeleton(),
+                DeviceStatus.idle ||
+                DeviceStatus.loading =>
+                  _skeleton(),
                 DeviceStatus.error => ErrorView(
                     message: p.errorMessage ?? 'Failed to load devices',
                     onRetry: () => p.load(),
@@ -98,6 +124,71 @@ class _DevicesScreenState extends State<DevicesScreen> {
               },
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _guestView(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.bloodRed.withValues(alpha: 0.15),
+                border: Border.all(color: AppColors.bloodRed, width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66C8102E),
+                    blurRadius: 22,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.devices_other_rounded,
+                color: Colors.white,
+                size: 38,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Device Session Management',
+              style: AppTextStyles.h2
+                  .copyWith(color: AppColors.white, fontSize: 19),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Sign in to manage your active device sessions and protect your account streaming limits.',
+              style:
+                  AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 26),
+            AdwaButton(
+              label: 'Sign In / Register',
+              icon: Icons.login_rounded,
+              expanded: true,
+              onPressed: () async {
+                final ok = await GuestAuthPrompt.show(
+                  context,
+                  title: 'Sign In to Manage Devices',
+                  message:
+                      'Please sign in or register to manage your active device sessions.',
+                );
+                if (ok && mounted) {
+                  context.read<DeviceProvider>().load();
+                }
+              },
+            ),
+          ],
         ),
       ),
     );

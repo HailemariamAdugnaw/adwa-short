@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../core/widgets/connection_lost_view.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/poster_card.dart';
 import '../../../core/widgets/shelf_banner.dart';
@@ -148,6 +148,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _applyShelfTab();
       });
     }
+
+    final isHomeError =
+        shelves.status == ShelfLoadStatus.error && shelves.shelves.isEmpty;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: AppColors.black,
@@ -158,21 +162,31 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: _onRefresh,
         child: Stack(
           children: [
-            CustomScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(child: _hero()),
-                _body(cat, shelves),
-                const SliverToBoxAdapter(child: SizedBox(height: 96)),
-              ],
-            ),
+            if (isHomeError)
+              Positioned.fill(
+                top: topInset + _pinnedFooterGap,
+                bottom: 80,
+                child: ConnectionLostView(
+                  isFullScreen: false,
+                  onRetry: _onRefresh,
+                ),
+              )
+            else
+              CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(child: _hero()),
+                  _body(cat, shelves),
+                  const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                ],
+              ),
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: _PinnedHeader(
-                opacity: _headerOpacity,
+                opacity: isHomeError ? 1.0 : _headerOpacity,
                 searchBar: OverlaySearchBar(
                   onTap: widget.onOpenSearch,
                   onFilterTap: widget.onOpenSearch,
@@ -239,9 +253,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return const SliverToBoxAdapter(child: HomeLoadingView());
       case ShelfLoadStatus.error:
         return SliverToBoxAdapter(
-          child: ErrorView(
-            message: shelves.errorMessage ?? 'Failed to load shelves',
-            onRetry: () => shelves.load(),
+          child: ConnectionLostView(
+            isFullScreen: false,
+            onRetry: _onRefresh,
           ),
         );
       case ShelfLoadStatus.refreshing:
@@ -267,8 +281,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return const SliverToBoxAdapter(child: HomeLoadingView());
       case CategorySeriesStatus.error:
         return SliverToBoxAdapter(
-          child: ErrorView(
-            message: cat.seriesError ?? 'Failed to load series',
+          child: ConnectionLostView(
+            isFullScreen: false,
             onRetry: () => cat.loadFilteredSeries(refresh: true),
           ),
         );

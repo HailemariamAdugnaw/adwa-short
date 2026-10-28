@@ -25,7 +25,7 @@ import toast from 'react-hot-toast'
 import { formatBirr, formatNumber } from '../../lib/format'
 
 const INFO_ITEMS = [
-  'Users purchase coin packages using Birr (local currency) via Telebirr or wallet deposit.',
+  'Users purchase coin packages using Birr (local currency) via Commercial Bank of Ethiopia (CBE / CBE Birr) or platform wallet.',
   'Each package has a fixed coin amount and price in Birr.',
   'The coin-to-Birr conversion rate is set in Settings (e.g., 1 coin = 1 Birr).',
   'When a user spends coins to unlock an episode, the revenue is split between the platform and the content creator based on the creator\'s revenue split percentage.',

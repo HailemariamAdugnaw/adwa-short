@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,9 +8,12 @@ import '../../../core/services/ad_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/adwa_button.dart';
+import '../../../core/widgets/connection_lost_view.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
+import '../../../core/widgets/smooth_video_snap_scroll_physics.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/profile/providers/wallet_provider.dart';
 import '../../../features/reviews/widgets/review_bottom_sheet.dart';
 import '../../../features/series/providers/series_provider.dart';
@@ -17,6 +21,7 @@ import '../../../models/episode.dart';
 import '../../../models/series.dart';
 import '../../../models/short_item.dart';
 import '../providers/shorts_provider.dart';
+import '../widgets/episode_selector_sheet.dart';
 import '../widgets/rating_sheet.dart';
 import '../widgets/short_video_item.dart';
 
@@ -74,6 +79,19 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   Future<void> _handleCoinUnlock(ShortItem item, int index) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Unlock',
+        message:
+            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+      );
+      if (!loggedIn || !mounted) return;
+      await context.read<WalletProvider>().loadWallet(refresh: true);
+      await context.read<WalletProvider>().loadAccessDashboard(refresh: true);
+    }
+
     final walletProvider = context.read<WalletProvider>();
     final seriesProvider = context.read<SeriesProvider>();
     final shortsProvider = context.read<ShortsProvider>();
@@ -149,11 +167,25 @@ class _ShortsScreenState extends State<ShortsScreen> {
             Text('Unlock Episode', style: AppTextStyles.h3),
           ],
         ),
-        content: Text(
-          'Unlock ${item.title} for $requiredCoins coins?\n\n'
-          'Current Balance: $currentCoins coins\n'
-          'Balance After: ${currentCoins - requiredCoins} coins',
-          style: AppTextStyles.body2,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Deduct $requiredCoins coins to unlock this episode?',
+              style: AppTextStyles.body1.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Episode: ${item.title}',
+              style: AppTextStyles.body3.copyWith(color: AppColors.white),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Current Balance: $currentCoins coins\nBalance After: ${currentCoins - requiredCoins} coins',
+              style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -161,7 +193,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
             child: Text('Cancel', style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary)),
           ),
           AdwaButton(
-            label: 'Unlock ($requiredCoins Coins)',
+            label: 'Confirm Unlock',
             size: AdwaButtonSize.sm,
             onPressed: () => Navigator.of(ctx).pop(true),
           ),
@@ -207,12 +239,32 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   Future<void> _openPasses() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Buy Pass',
+        message:
+            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+      );
+      if (!loggedIn || !mounted) return;
+    }
     await Navigator.of(context).pushNamed(AppRoutes.passes);
     if (!mounted) return;
     await _refreshAfterPayment();
   }
 
   Future<void> _openSubscriptions() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Subscribe',
+        message:
+            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+      );
+      if (!loggedIn || !mounted) return;
+    }
     await Navigator.of(context).pushNamed(AppRoutes.subscriptions);
     if (!mounted) return;
     await _refreshAfterPayment();
@@ -260,6 +312,20 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   void _showEpisodesSheet(ShortItem item) {
+    if (item.seriesId.isNotEmpty) {
+      EpisodeSelectorSheet.show(
+        context,
+        seriesId: item.seriesId,
+        currentEpisodeId: item.episodeId,
+        currentEpisodeNumber: item.episodeNumber,
+        onEpisodeSelected: (ep) {
+          final episode = ep;
+          final series = _toSeries(item, episode);
+          widget.onPlayEpisode?.call(series, episode);
+        },
+      );
+      return;
+    }
     final episode = _toEpisode(item);
     if (episode == null || widget.onPlayEpisode == null) return;
     final series = _toSeries(item, episode);
@@ -267,13 +333,20 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   Series _toSeries(ShortItem item, Episode episode) {
+    final cached = context.read<SeriesProvider>().series;
+    final episodes = (cached != null &&
+            cached.id == item.seriesId &&
+            cached.episodes.isNotEmpty)
+        ? cached.episodes
+        : [episode];
     return Series(
       id: item.seriesId,
       title: item.seriesTitle ?? item.title,
       description: item.description,
       posterUrl: item.thumbnailUrl,
-      totalEpisodes: item.totalEpisodes,
-      episodes: [episode],
+      totalEpisodes:
+          item.totalEpisodes > 0 ? item.totalEpisodes : episodes.length,
+      episodes: episodes,
     );
   }
 
@@ -317,9 +390,9 @@ class _ShortsScreenState extends State<ShortsScreen> {
         );
       case ShortsLoadStatus.error:
         if (p.items.isEmpty) {
-          return ErrorView(
-            message: p.errorMessage ?? 'Failed to load shorts',
-            onRetry: () => p.load(),
+          return ConnectionLostView(
+            isFullScreen: false,
+            onRetry: () => p.refresh(),
           );
         }
         break;
@@ -328,36 +401,90 @@ class _ShortsScreenState extends State<ShortsScreen> {
         break;
     }
     if (p.items.isEmpty) {
-      return EmptyState(
-        icon: Icons.play_circle_outline_rounded,
-        title: 'No shorts available right now',
-        message: 'Pull down to refresh',
-        actionLabel: 'Refresh',
-        onAction: () => p.refresh(),
+      return RefreshIndicator(
+        color: AppColors.bloodRed,
+        backgroundColor: AppColors.surfaceElevated,
+        onRefresh: () => p.refresh(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: EmptyState(
+                icon: Icons.play_circle_outline_rounded,
+                title: 'No shorts available right now',
+                message: 'Pull down to refresh',
+                actionLabel: 'Refresh',
+                onAction: () => p.refresh(),
+              ),
+            ),
+          ],
+        ),
       );
     }
-    return PageView.builder(
-      controller: _pageController,
-      scrollDirection: Axis.vertical,
-      itemCount: p.items.length + (p.hasMore ? 1 : 0),
-      onPageChanged: _onPageChanged,
-      itemBuilder: (context, i) {
-        if (i >= p.items.length) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => p.load());
-          return const Center(
-            child: LoadingShimmer(width: 40, height: 40, borderRadius: 20),
-          );
-        }
-        final item = p.items[i];
-        if (!widget.active || i != _current) {
-          return Container(color: AppColors.black);
-        }
-        return ShortVideoItem(
-          item: item,
-          totalEpisodes: item.totalEpisodes,
-          isAccessible: item.isAccessible,
-          accessReason: item.accessReason,
-          onSave: () => p.toggleSave(i),
+    return RefreshIndicator(
+      color: AppColors.bloodRed,
+      backgroundColor: AppColors.surfaceElevated,
+      onRefresh: () => p.refresh(),
+      notificationPredicate: (notification) =>
+          notification.depth == 0 &&
+          notification.metrics.pixels <= 0 &&
+          (_pageController.hasClients ? (_pageController.page ?? 0) <= 0.05 : true),
+      child: SizedBox.expand(
+        child: PageView.builder(
+          controller: _pageController,
+          dragStartBehavior: DragStartBehavior.down,
+          physics: const SmoothVideoSnapScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+          ),
+          scrollDirection: Axis.vertical,
+          itemCount: p.items.length + (p.hasMore ? 1 : 0),
+          onPageChanged: _onPageChanged,
+          itemBuilder: (context, i) {
+          if (i >= p.items.length) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => p.load());
+            return const Center(
+              child: LoadingShimmer(width: 40, height: 40, borderRadius: 20),
+            );
+          }
+          final item = p.items[i];
+          final isCurrent = i == _current;
+          final isAdjacent = (i == _current - 1 || i == _current + 1);
+
+          if (!isCurrent && !isAdjacent) {
+            return const ColoredBox(color: AppColors.black);
+          }
+
+          final wallet = context.watch<WalletProvider>();
+          final hasTemporalAccess = wallet.hasActiveAccess;
+          final effectivelyAccessible = item.isAccessible || hasTemporalAccess;
+          final effectiveReason = hasTemporalAccess
+              ? (wallet.activeSubscription?.hasActiveSubscription == true
+                  ? 'subscription'
+                  : 'pass')
+              : item.accessReason;
+
+          return ShortVideoItem(
+            item: item,
+            totalEpisodes: item.totalEpisodes,
+            isAccessible: effectivelyAccessible,
+            accessReason: effectiveReason,
+            autoPlay: widget.active && isCurrent,
+          onSave: () async {
+            final auth = context.read<AuthProvider>();
+            if (!auth.isAuthenticated) {
+              final loggedIn = await GuestAuthPrompt.show(
+                context,
+                title: 'Sign In to Save',
+                message:
+                    'Please sign in or register to save episodes to your list.',
+              );
+              if (!loggedIn || !mounted) return;
+            }
+            p.toggleSave(i);
+          },
           onShowEpisodes: () => _showEpisodesSheet(item),
           onRate: () => _openRating(item),
           onReviews: () => _openReviews(item),
@@ -365,6 +492,17 @@ class _ShortsScreenState extends State<ShortsScreen> {
           onSearch: _openSearch,
           onWatchFull: () => _watchFull(item),
           onUnlockAds: () async {
+            final auth = context.read<AuthProvider>();
+            if (!auth.isAuthenticated) {
+              final loggedIn = await GuestAuthPrompt.show(
+                context,
+                title: 'Sign In to Unlock',
+                message:
+                    'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+              );
+              if (!loggedIn || !mounted) return;
+              await context.read<WalletProvider>().loadWallet(refresh: true);
+            }
             final adService = context.read<AdService>();
             final ok = await adService.showRewardedAd(
               context,
@@ -389,6 +527,8 @@ class _ShortsScreenState extends State<ShortsScreen> {
           },
         );
       },
+      ),
+      ),
     );
   }
 }

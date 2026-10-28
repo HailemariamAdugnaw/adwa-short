@@ -13,6 +13,10 @@ import {
   Tv,
   Hourglass,
   Percent,
+  Landmark,
+  CreditCard,
+  Send,
+  CheckCircle2,
 } from 'lucide-react'
 import {
   useRevenueOverview,
@@ -22,7 +26,9 @@ import {
   useProcessExpiredPasses,
   useAdminPayouts,
 } from '../../lib/hooks'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { post, errMsg } from '../../lib/api'
 import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -63,6 +69,16 @@ export function RevenueOverview() {
   const { data: payoutsData, isLoading: loadingPayouts } = useAdminPayouts({ limit: 10 })
   const processExpired = useProcessExpiredPasses()
   const [confirmExpired, setConfirmExpired] = useState(false)
+
+  const disburseMutation = useMutation({
+    mutationFn: (payoutId) => post(`/admin/revenue/payouts/${payoutId}/disburse`),
+    onSuccess: (data) => {
+      toast.success(data?.message || 'Payout disbursed successfully via CBE')
+      qc.invalidateQueries({ queryKey: ['admin-payouts'] })
+      qc.invalidateQueries({ queryKey: ['revenue-overview'] })
+    },
+    onError: (err) => toast.error(errMsg(err, 'Failed to disburse payout via CBE')),
+  })
 
   const methods = Array.isArray(byMethod) ? byMethod : []
   const creators = Array.isArray(byCreator) ? byCreator : []
@@ -165,6 +181,39 @@ export function RevenueOverview() {
           loading={isLoading}
         />
       </div>
+
+      {/* Platform Treasury Commercial Bank of Ethiopia (CBE) Card */}
+      <Card padding="md" className="border-l-4 border-l-accent bg-surface-1">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent border border-accent/20">
+              <Landmark className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-text-primary">
+                  Platform Treasury &bull; Commercial Bank of Ethiopia (CBE)
+                </h3>
+                <Badge tone="accent">Central Clearing Account</Badge>
+              </div>
+              <p className="text-xs text-text-secondary mt-0.5">
+                CBE Account: <span className="font-mono text-text-primary font-semibold">1000293847561</span> &bull; Holder: <span className="font-semibold text-text-primary">ADWA SHORT ENTERTAINMENT PLATFORM</span> &bull; Finfine Branch
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6 text-right">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">Treasury Retained</p>
+              <p className="text-lg font-bold text-accent tabular-nums">{formatBirr(totalPlatform)}</p>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">Creator Disbursements</p>
+              <p className="text-lg font-bold text-success tabular-nums">{formatBirr(totalPaidOut)}</p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Platform Share Breakdown Details */}
       <Card padding="md">
@@ -347,18 +396,19 @@ export function RevenueOverview() {
             <TR>
               <TH>Requested At</TH>
               <TH>Creator</TH>
+              <TH>Recipient CBE Account</TH>
               <TH className="text-right">Amount</TH>
               <TH>Status</TH>
-              <TH>Reference</TH>
-              <TH>Processed By Admin</TH>
-              <TH>Notes</TH>
+              <TH>CBE Transaction Ref</TH>
+              <TH>Processed By</TH>
+              <TH className="text-right">Action</TH>
             </TR>
           </THead>
           <TBody>
             {loadingPayouts ? (
-              <SkeletonRow colSpan={7} rows={4} />
+              <SkeletonRow colSpan={8} rows={4} />
             ) : payoutsList.length === 0 ? (
-              <EmptyRow colSpan={7}>
+              <EmptyRow colSpan={8}>
                 <EmptyState
                   icon={HandCoins}
                   title="No payouts on record"
@@ -374,13 +424,27 @@ export function RevenueOverview() {
                   <TD className="font-medium text-text-primary">
                     {p.creator_name || `Creator #${p.creator_id}`}
                   </TD>
+                  <TD>
+                    {p.bank_account_number ? (
+                      <div>
+                        <p className="font-mono text-xs font-semibold text-text-primary">
+                          {p.bank_account_number}
+                        </p>
+                        <p className="text-[10px] text-text-muted">
+                          {p.bank_account_name || 'Verified CBE Account'}
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-text-muted italic">Unset CBE Account</span>
+                    )}
+                  </TD>
                   <TD className="text-right tabular-nums font-medium text-success">
                     {formatBirr(p.amount_birr)}
                   </TD>
                   <TD>
                     <Badge
                       tone={
-                        p.status === 'processed'
+                        p.status === 'processed' || p.status === 'completed'
                           ? 'success'
                           : p.status === 'pending'
                             ? 'warning'
@@ -390,11 +454,29 @@ export function RevenueOverview() {
                       {p.status}
                     </Badge>
                   </TD>
-                  <TD className="font-mono text-xs">{p.reference || '—'}</TD>
+                  <TD className="font-mono text-xs">
+                    {p.cbe_transaction_id || p.reference || '—'}
+                  </TD>
                   <TD className="text-xs text-text-secondary">
                     {p.processed_by_admin_id ? `Admin #${p.processed_by_admin_id}` : 'Pending'}
                   </TD>
-                  <TD className="text-xs text-text-secondary">{p.notes || '—'}</TD>
+                  <TD className="text-right">
+                    {p.status === 'pending' ? (
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        leftIcon={<Send className="h-3 w-3" />}
+                        onClick={() => disburseMutation.mutate(p.id)}
+                        loading={disburseMutation.isPending && disburseMutation.variables === p.id}
+                      >
+                        Disburse via CBE
+                      </Button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Disbursed
+                      </span>
+                    )}
+                  </TD>
                 </TR>
               ))
             )}

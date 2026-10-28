@@ -36,19 +36,19 @@ export function CreatorFinancials() {
   })
 
   // Account form state
-  const [bankName, setBankName] = useState('')
+  const [bankName, setBankName] = useState('Commercial Bank of Ethiopia (CBE)')
   const [accountName, setAccountName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('telebirr')
+  const [paymentMethod, setPaymentMethod] = useState('cbe')
   const [mobileMoney, setMobileMoney] = useState('')
   const [taxId, setTaxId] = useState('')
 
   useEffect(() => {
     if (accountData) {
-      setBankName(accountData.bank_name || '')
+      setBankName(accountData.bank_name || 'Commercial Bank of Ethiopia (CBE)')
       setAccountName(accountData.bank_account_name || '')
       setAccountNumber(accountData.bank_account_number || '')
-      setPaymentMethod(accountData.payment_method || 'telebirr')
+      setPaymentMethod(accountData.payment_method || 'cbe')
       setMobileMoney(accountData.mobile_money_number || '')
       setTaxId(accountData.tax_id || '')
     }
@@ -137,16 +137,14 @@ export function CreatorFinancials() {
                       onChange={(e) => setPaymentMethod(e.target.value)}
                       className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-medium text-text-primary focus:border-accent focus:outline-none"
                     >
-                      <option value="telebirr">Telebirr (Recommended)</option>
-                      <option value="cbe">CBE (Commercial Bank of Ethiopia)</option>
-                      <option value="awash">Awash Bank</option>
-                      <option value="dashen">Dashen Bank</option>
+                      <option value="cbe">Commercial Bank of Ethiopia (CBE) (Recommended)</option>
+                      <option value="cbe_birr">CBE Birr (Mobile)</option>
                       <option value="bank_transfer">Other Commercial Bank</option>
                     </select>
                   </div>
 
                   <Input
-                    label="Mobile Money Phone (Telebirr / M-Pesa)"
+                    label="CBE Birr Phone Number (Optional)"
                     value={mobileMoney}
                     onChange={(e) => setMobileMoney(e.target.value)}
                     placeholder="+251911000000"
@@ -216,7 +214,7 @@ export function CreatorFinancials() {
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>Telebirr transfers are processed automatically to registered mobile lines.</span>
+                  <span>All earnings disbursements are transferred directly from the Adwa Short Central Treasury to your registered Commercial Bank of Ethiopia (CBE) account or CBE Birr wallet.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />

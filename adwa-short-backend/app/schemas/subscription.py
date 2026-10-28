@@ -94,3 +94,37 @@ class AccessStatus(BaseModel):
     subscription_expires_at: Optional[datetime] = None
     balance_birr: float
     balance_coins: int
+
+
+class ActivePassStatus(BaseModel):
+    has_active_pass: bool
+    purchase_id: Optional[int] = None
+    pass_id: Optional[int] = None
+    name: Optional[str] = None
+    duration_hours: Optional[int] = None
+    price_birr: Optional[float] = None
+    starts_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    is_active: bool = False
+    server_time: datetime
+    remaining_seconds: int = 0
+
+
+class ActiveSubscriptionStatus(BaseModel):
+    has_active_subscription: bool
+    subscription_id: Optional[int] = None
+    plan_id: Optional[int] = None
+    plan_name: Optional[str] = None
+    billing_cycle: Optional[str] = None
+    price_birr: Optional[float] = None
+    status: Optional[str] = None
+    started_at: Optional[datetime] = None
+    next_billing_at: Optional[datetime] = None
+    server_time: datetime
+    remaining_seconds: int = 0
+
+
+class UserAccessDashboardOut(BaseModel):
+    server_time: datetime
+    active_pass: ActivePassStatus
+    active_subscription: ActiveSubscriptionStatus

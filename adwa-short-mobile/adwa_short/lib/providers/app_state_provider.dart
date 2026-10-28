@@ -9,10 +9,22 @@ class AppStateProvider extends ChangeNotifier {
   User? _user;
   String? _deviceId;
   Locale _locale = const Locale('en');
+  bool _isConnectionLost = false;
 
   User? get user => _user;
   String? get deviceId => _deviceId;
   Locale get locale => _locale;
+  bool get isConnectionLost => _isConnectionLost;
+
+  void setConnectionLost(bool lost) {
+    if (_isConnectionLost == lost) return;
+    _isConnectionLost = lost;
+    notifyListeners();
+  }
+
+  void clearConnectionLost() {
+    setConnectionLost(false);
+  }
 
   void setUser(User? user) {
     if (_user == user) return;

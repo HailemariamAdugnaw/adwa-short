@@ -298,11 +298,11 @@ The walk-in center is the headline feature for the physical walk-in office. Find
 1. **Search the user** — by phone number, full name, or User ID. The system returns a list of
    matching users with their current wallet balance.
 2. **Select the user** — click to confirm. The user card highlights in red and Step 2 unlocks.
-3. **Enter cash received** — type the Birr amount the customer handed over. The dashboard
-   auto-suggests the coin equivalent based on the `coin_price_birr` setting (Settings → Pricing).
-   Adjust the coin amount in the optional field if needed.
+3. **Enter cash received** — type the Birr amount the customer handed over. The system credits
+   the exact fiat cash balance without automatically generating matching coins. You may optionally
+   enter coins to grant promotional coins independently.
 4. **Add a note** (optional) — e.g. *"Customer paid cash at office, 2025-10-08 · receipt #1234"*.
-5. **Click "Top-Up Wallet"** — the dashboard calls `POST /admin/wallet/manual-deposit`. The user's
+5. **Click "Top-Up Wallet"** — the dashboard calls `POST /admin/wallet/top-up`. The user's
    wallet is credited in real time, and a **printable receipt** appears.
 6. **Print the receipt** — the receipt has a clean black-on-white layout that prints well on
    standard A4/thermal printers. Click **Print** or close the modal.

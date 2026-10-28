@@ -15,9 +15,16 @@ def days_from_now(days: float) -> datetime:
     return utcnow() + timedelta(days=days)
 
 
+def ensure_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def is_expired(dt: datetime | None) -> bool:
     if dt is None:
         return True
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt <= utcnow()
+    dt_utc = ensure_utc(dt)
+    return dt_utc <= utcnow()

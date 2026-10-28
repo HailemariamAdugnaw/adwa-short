@@ -644,6 +644,10 @@ async def create_payout(
         amount_birr=float(payload.amount_birr),
         admin_id=admin.id,
         notes=payload.notes,
+        bank_account_number=payload.bank_account_number or creator.bank_account_number,
+        bank_account_name=payload.bank_account_name or creator.bank_account_name or creator.name,
+        bank_name=payload.bank_name or creator.bank_name or "Commercial Bank of Ethiopia (CBE)",
+        auto_disburse=True,
     )
     await db.commit()
     await db.refresh(payout)

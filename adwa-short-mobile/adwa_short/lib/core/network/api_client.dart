@@ -25,6 +25,8 @@ class ApiClient {
 
   void Function()? onSessionExpired;
 
+  void Function()? onConnectionLost;
+
   static String? _cachedBaseUrl;
 
   static String _resolveBaseUrl() {
@@ -119,6 +121,7 @@ class ApiClient {
           .then((stream) => http.Response.fromStream(stream))
           .timeout(const Duration(seconds: 30));
     } catch (e, st) {
+      onConnectionLost?.call();
       throw ApiException.network('Network error: $e', stackTrace: st);
     }
 

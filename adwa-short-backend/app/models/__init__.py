@@ -37,6 +37,7 @@ from app.models.revenue import (
 from app.models.rating import Rating
 from app.models.review import Review
 from app.models.download import DownloadToken
+from app.models.cbe_payment import CbePaymentOrder
 
 __all__ = [
     "User",
@@ -73,4 +74,5 @@ __all__ = [
     "Rating",
     "Review",
     "DownloadToken",
+    "CbePaymentOrder",
 ]

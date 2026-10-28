@@ -236,6 +236,122 @@ async def test_calculate_pass_consumption_no_views_returns_unconsumed():
         assert float(txs[0].platform_share_birr) == 50.0
 
 
+async def _seed_subscription_with_views() -> tuple[int, int, int, int]:
+    creator_id, ep_id, user_id = await _seed_episode_with_creator(creator_split=50.0)
+    async with AsyncSessionLocal() as s:
+        creator2 = Creator(name="Rev Sub Creator 2", default_revenue_split_pct=60.0, is_active=True)
+        s.add(creator2)
+        await s.flush()
+        series2 = Series(
+            title="Rev Sub Series 2",
+            type="series",
+            is_published=True,
+            free_episode_count=0,
+            total_episodes=1,
+            creator_id=creator2.id,
+        )
+        s.add(series2)
+        await s.flush()
+        ep2 = Episode(
+            series_id=series2.id,
+            creator_id=creator2.id,
+            episode_number=1,
+            title="Rev Sub E2b",
+            coin_cost=10,
+            is_published=True,
+            published_at=datetime.now(timezone.utc),
+        )
+        s.add(ep2)
+        await s.flush()
+
+        plan = SubscriptionPlan(name="Monthly Sub", billing_cycle="monthly", price_birr=120.0, is_active=True)
+        s.add(plan)
+        await s.flush()
+        now = datetime.now(timezone.utc)
+        sub = Subscription(
+            user_id=user_id,
+            plan_id=plan.id,
+            status="active",
+            started_at=now - timedelta(days=31),
+            next_billing_at=now - timedelta(days=1),
+        )
+        s.add(sub)
+        await s.flush()
+
+        # View 1: 120s of ep1 (Creator 1: 50% split)
+        s.add(
+            ViewLog(
+                user_id=user_id,
+                episode_id=ep_id,
+                series_id=None,
+                watch_time_seconds=120,
+                subscription_id=sub.id,
+            )
+        )
+        # View 2: 45s of ep2 (< 60s, not qualified)
+        s.add(
+            ViewLog(
+                user_id=user_id,
+                episode_id=ep2.id,
+                series_id=None,
+                watch_time_seconds=45,
+                subscription_id=sub.id,
+            )
+        )
+        await s.commit()
+        return creator_id, creator2.id, sub.id, user_id
+
+
+async def test_calculate_subscription_consumption_prorates_by_watch_time():
+    c1, c2, sub_id, user_id = await _seed_subscription_with_views()
+    async with AsyncSessionLocal() as s:
+        svc = RevenueService(s)
+        txs = await svc.calculate_subscription_consumption(user_id, sub_id)
+        await s.commit()
+
+        assert len(txs) == 2
+        sub_tx = next(t for t in txs if t.source_type == "subscription_consumption")
+        unconsumed_tx = next(t for t in txs if t.source_type == "unconsumed_subscription")
+
+        assert sub_tx.creator_id == c1
+        assert float(sub_tx.creator_share_birr) > 0
+        assert float(sub_tx.platform_share_birr) > 0
+        assert unconsumed_tx.creator_id is None
+        assert float(unconsumed_tx.creator_share_birr) == 0.0
+        assert float(unconsumed_tx.platform_share_birr) > 0
+        assert round(float(sub_tx.gross_amount_birr) + float(unconsumed_tx.gross_amount_birr), 2) == 120.0
+
+
+async def test_calculate_subscription_consumption_no_views_returns_unconsumed():
+    creator_id, ep_id, user_id = await _seed_episode_with_creator()
+    async with AsyncSessionLocal() as s:
+        plan = SubscriptionPlan(name="Monthly Plan", billing_cycle="monthly", price_birr=150.0, is_active=True)
+        s.add(plan)
+        await s.flush()
+        now = datetime.now(timezone.utc)
+        sub = Subscription(
+            user_id=user_id,
+            plan_id=plan.id,
+            status="active",
+            started_at=now - timedelta(days=31),
+            next_billing_at=now - timedelta(days=1),
+        )
+        s.add(sub)
+        await s.commit()
+        sub_id = sub.id
+
+    async with AsyncSessionLocal() as s:
+        svc = RevenueService(s)
+        txs = await svc.calculate_subscription_consumption(user_id, sub_id)
+        await s.commit()
+
+        assert len(txs) == 1
+        assert txs[0].source_type == "unconsumed_subscription"
+        assert float(txs[0].gross_amount_birr) == 150.0
+        assert float(txs[0].creator_share_birr) == 0.0
+        assert float(txs[0].platform_share_birr) == 150.0
+
+
 async def test_check_expired_passes_marks_inactive():
     c1, c2, purchase_id, user_id = await _seed_pass_with_views()
     async with AsyncSessionLocal() as s:

@@ -104,6 +104,16 @@ class Payout(Base):
     processed_by_admin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Commercial Bank of Ethiopia (CBE) Creator Disbursement Audit Fields
+    cbe_transaction_id: Mapped[Optional[str]] = mapped_column(String(128), unique=True, nullable=True, index=True)
+    bank_account_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    bank_account_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    bank_name: Mapped[str] = mapped_column(String(120), default="Commercial Bank of Ethiopia (CBE)", nullable=False)
+    cbe_payout_status: Mapped[Optional[str]] = mapped_column(String(32), default="pending", nullable=True)
+    treasury_account_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    cbe_response_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     creator: Mapped["Creator"] = relationship(back_populates="payouts")

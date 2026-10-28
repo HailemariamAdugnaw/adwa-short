@@ -119,7 +119,7 @@ class AppStrings {
   static const String settings = 'Settings';
 
   static const String depositWallet = 'Deposit Wallet';
-  static const String depositWalletHint = 'Telebirr integration (demo)';
+  static const String depositWalletHint = 'Commercial Bank of Ethiopia (CBE Birr)';
   static const String transactionHistory = 'Transaction History';
   static const String noTransactions = 'No transactions yet';
   static const String buyCoins = 'Buy Coins';

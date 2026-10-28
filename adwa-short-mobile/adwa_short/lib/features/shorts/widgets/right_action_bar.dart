@@ -32,10 +32,15 @@ class RightActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratingProvider = context.watch<RatingProvider>();
+    RatingProvider? ratingProvider;
+    try {
+      ratingProvider = Provider.of<RatingProvider>(context, listen: true);
+    } catch (_) {
+      ratingProvider = null;
+    }
     final episodeId = item.episodeId ?? item.id;
-    final summary = ratingProvider.summaryFor(episodeId);
-    final userRating = ratingProvider.userRatingFor(episodeId);
+    final summary = ratingProvider?.summaryFor(episodeId);
+    final userRating = ratingProvider?.userRatingFor(episodeId) ?? 0;
     final count = summary?.count ?? item.ratingCount ?? 0;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -105,7 +110,7 @@ class RightActionBar extends StatelessWidget {
     }
     return GestureDetector(
       onTap: isDownloading ? null : onDownload,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -153,7 +158,7 @@ class RightActionBar extends StatelessWidget {
   }) {
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

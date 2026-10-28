@@ -100,6 +100,12 @@ void main() {
             : currentPosition;
       }
 
+      void onControllerUpdate(Duration pos) {
+        if (!isScrubbing && !isSeeking) {
+          currentPosition = pos;
+        }
+      }
+
       // Initial state: bound to playback position
       expect(computeDisplayPosition(), const Duration(seconds: 10));
 
@@ -109,10 +115,8 @@ void main() {
       expect(computeDisplayPosition(), const Duration(seconds: 45));
 
       // While dragging, simulated controller/timer update fires with stale time (11s)
-      final incomingControllerPos = const Duration(seconds: 11);
-      if (!isScrubbing && !isSeeking) {
-        currentPosition = incomingControllerPos;
-      }
+      const incomingControllerPos = Duration(seconds: 11);
+      onControllerUpdate(incomingControllerPos);
       // Position remains 45s, not snapped back to 11s!
       expect(computeDisplayPosition(), const Duration(seconds: 45));
 
@@ -123,9 +127,7 @@ void main() {
       currentPosition = const Duration(seconds: 52);
 
       // Stale native event (e.g. 11s) before seek completes is ignored during isSeeking
-      if (!isScrubbing && !isSeeking) {
-        currentPosition = incomingControllerPos;
-      }
+      onControllerUpdate(incomingControllerPos);
       expect(computeDisplayPosition(), const Duration(seconds: 52));
 
       // Seek completes and settles
@@ -135,15 +137,17 @@ void main() {
     });
 
     test('pausing and resuming preserves exact live timestamp without reset', () {
-      var livePosition = const Duration(seconds: 14, milliseconds: 320);
+      final livePosition = const Duration(seconds: 14, milliseconds: 320);
       var isPlaying = true;
 
       // Pause
       isPlaying = false;
+      expect(isPlaying, isFalse);
       expect(livePosition.inMilliseconds, 14320);
 
       // Resume without re-initializing or seeking to 0
       isPlaying = true;
+      expect(isPlaying, isTrue);
       expect(livePosition.inMilliseconds, 14320);
       expect(Formatters.playbackClock(livePosition), '00:14');
     });

@@ -33,6 +33,25 @@ class Settings(BaseSettings):
     AD_ADS_REQUIRED: int = 2
     AD_EPISODES_UNLOCKED: int = 1
 
+    # Commercial Bank of Ethiopia (CBE / CBE Birr) Gateway & Webhook Configuration
+    CBE_ENABLED: bool = True
+    CBE_TEST_MODE: bool = True
+    CBE_API_BASE_URL: str = "https://api.cbe.com.et"
+    CBE_MERCHANT_ID: str = "CBE_MERCHANT_ADWA_SHORT"
+    CBE_TILL_NUMBER: str = "847291"
+    CBE_API_KEY: str = "cbe_api_key_adwashort_live"
+    CBE_SECRET_KEY: str = "cbe_secret_key_change_in_production"
+    CBE_WEBHOOK_SECRET: str = "cbe_webhook_signing_secret_prod"
+    CBE_WEBHOOK_URL: str = "https://api.adwashort.com/api/v1/payments/cbe/webhook"
+    CBE_RETURN_URL: str = "adwashort://payment-complete"
+    CBE_CREATOR_RESERVE_SPLIT_PCT: float = 50.0  # Default % reserved for creator pool from direct CBE purchases
+
+    # Commercial Bank of Ethiopia (CBE) - Platform Treasury Details
+    CBE_TREASURY_ACCOUNT_NUMBER: str = "1000293847561"
+    CBE_TREASURY_ACCOUNT_NAME: str = "ADWA SHORT ENTERTAINMENT PLATFORM"
+    CBE_TREASURY_BANK_NAME: str = "Commercial Bank of Ethiopia (CBE)"
+    CBE_TREASURY_BRANCH: str = "Finfine Branch / Head Office"
+
     @field_validator("CORS_ORIGINS")
     @classmethod
     def _strip_cors(cls, v: str) -> str:

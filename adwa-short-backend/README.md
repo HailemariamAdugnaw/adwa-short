@@ -176,6 +176,30 @@ For any episode the server follows this priority (`app/services/monetization.py`
 5. `coin_cost > 0` and wallet has enough coins → ALLOWED_COINS (deducts)
 6. else → BLOCKED with reason `need_ad` | `need_coins` | `need_pass` | `need_subscription`
 
+## Financial Ledger & Watch-Time Attribution Model
+ADWA SHORT implements a unified prorated watch-time financial attribution engine for both **Time Passes** and **Subscriptions** (`app/services/revenue.py`):
+
+1. **Per-Second Valuation Formula**:
+   $$\text{rate\_per\_second} = \frac{\text{package\_price}}{\text{total\_duration\_seconds}}$$
+   - **Time Pass**: `total_duration_seconds = expires_at - starts_at` (fallback: `duration_hours * 3600`)
+   - **Subscription**: `total_duration_seconds = next_billing_at - started_at` (fallback: `30 * 86400` monthly, `365 * 86400` yearly)
+
+2. **Watch-Time Attribution Split**:
+   - For every qualified watch session ($\ge 60$ seconds) on each creator's episode:
+     $$\text{gross\_attributed\_revenue} = \text{watch\_time\_seconds} \times \text{rate\_per\_second}$$
+     $$\text{creator\_share} = \text{gross\_attributed\_revenue} \times \frac{\text{split\_pct}}{100.0}$$
+     $$\text{platform\_share} = \text{gross\_attributed\_revenue} - \text{creator\_share}$$
+   - The creator's net payable balance (`CreatorProfile.net_payable_birr`) is credited immediately upon consumption calculation.
+
+3. **Unconsumed Time (Platform Treasury)**:
+   - Any expired pass or subscription duration (or idle time) where no watch-time was recorded remains **100% with the Adwa Short Platform Treasury** (CBE Account: `1000293847561`):
+     $$\text{unconsumed\_amount} = \max(\text{package\_price} - \text{total\_attributed\_gross}, 0)$$
+   - Recorded as `unconsumed_pass` or `unconsumed_subscription` with `creator_share_birr = 0.0` and `platform_share_birr = unconsumed_amount`.
+
+4. **Coin Spends & Ad Revenues**:
+   - Coin spends on episode unlocks split according to creator contract split ratio.
+   - Ad revenues from Google AdMob are 100% retained by the Platform Treasury.
+
 ## Loyalty Engine
 After every deposit, the loyalty engine checks the user's Birr balance:
 - if `min_balance_birr <= balance_birr <= max_balance_birr`

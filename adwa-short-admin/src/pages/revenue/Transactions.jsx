@@ -33,6 +33,10 @@ const SOURCE_TYPES = [
   { value: 'subscription', label: 'Subscription' },
   { value: 'ad_revenue', label: 'Ad reward' },
   { value: 'deposit', label: 'Deposit' },
+  { value: 'cbe_coins', label: 'CBE Coins' },
+  { value: 'cbe_time_pass', label: 'CBE Time Pass' },
+  { value: 'cbe_subscription', label: 'CBE Subscription' },
+  { value: 'cbe_deposit', label: 'CBE Deposit' },
 ]
 
 function downloadCsv(rows, creatorsMap = {}) {

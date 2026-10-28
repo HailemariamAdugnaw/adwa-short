@@ -2,6 +2,7 @@ class AppRoutes {
   AppRoutes._();
 
   static const String splash = '/';
+  static const String welcome = '/welcome';
   static const String login = '/login';
   static const String register = '/register';
   static const String main = '/main';
@@ -20,4 +21,5 @@ class AppRoutes {
   static const String settings = '/profile/settings';
   static const String downloads = '/profile/downloads';
   static const String profile = '/profile';
+  static const String connectionLost = '/connection-lost';
 }

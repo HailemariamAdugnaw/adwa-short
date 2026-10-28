@@ -9,6 +9,7 @@ class ShortVideoItem extends StatelessWidget {
     required this.item,
     this.totalEpisodes,
     this.isAccessible = true,
+    this.autoPlay = true,
     this.accessReason,
     this.onSave,
     this.onShowEpisodes,
@@ -27,6 +28,7 @@ class ShortVideoItem extends StatelessWidget {
   final ShortItem item;
   final int? totalEpisodes;
   final bool isAccessible;
+  final bool autoPlay;
   final String? accessReason;
   final VoidCallback? onSave;
   final VoidCallback? onShowEpisodes;
@@ -43,14 +45,21 @@ class ShortVideoItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentEpNum = item.episodeNumber != null && item.episodeNumber! > 0
+        ? item.episodeNumber!
+        : 1;
+    final total = (totalEpisodes != null && totalEpisodes! > 0)
+        ? totalEpisodes!
+        : (item.totalEpisodes > 0 ? item.totalEpisodes : 0);
+
     return UnifiedVideoPlayer(
       key: ValueKey('short_${item.id}_${item.verticalVideoUrl}_$isAccessible'),
       presentation: VideoPlayerPresentation.embedded,
       videoUrl: item.verticalVideoUrl,
       title: item.title,
       description: item.description,
-      currentEpisode: 'EP.${item.episodeNumber ?? 0}',
-      totalEpisodes: totalEpisodes ?? item.totalEpisodes,
+      currentEpisode: 'EP.$currentEpNum',
+      totalEpisodes: total,
       ratingCount: item.ratingCount ?? 0,
       isSaved: item.isSaved,
       onRate: onRate ?? () {},
@@ -69,11 +78,12 @@ class ShortVideoItem extends StatelessWidget {
       onMaybeLater: onMaybeLater,
       posterUrl: item.thumbnailUrl,
       seriesTitle: item.seriesTitle,
+      seriesId: item.seriesId,
       episodeId: item.episodeId ?? item.id,
       accessReason: accessReason ?? item.accessReason,
       averageRating: item.averageRating,
       knownDuration: Duration(seconds: item.durationSeconds),
-      autoPlay: true,
+      autoPlay: autoPlay,
       looping: true,
     );
   }

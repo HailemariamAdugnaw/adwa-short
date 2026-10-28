@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/loading_shimmer.dart';
@@ -48,8 +49,11 @@ class _SplashScreenState extends State<SplashScreen>
     final auth = context.read<AuthProvider>();
     await auth.bootstrap();
     if (!mounted) return;
-    final route = auth.isAuthenticated ? '/main' : '/login';
-    Navigator.of(context).pushReplacementNamed(route);
+    if (auth.isAuthenticated) {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.main);
+    } else {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+    }
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +12,10 @@ import '../../../core/services/ad_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/adwa_button.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
+import '../../../core/widgets/smooth_video_snap_scroll_physics.dart';
 import '../../../core/widgets/unified_video_player.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/downloads/providers/download_provider.dart';
 import '../../../features/profile/providers/wallet_provider.dart';
 import '../../../features/ratings/providers/rating_provider.dart';
@@ -56,53 +60,98 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
 
   List<Episode> _getEpisodes(Series? providerSeries) {
     if (providerSeries != null &&
-        providerSeries.id == widget.series.id &&
+        (providerSeries.id == widget.series.id || widget.series.id.isEmpty) &&
         providerSeries.episodes.isNotEmpty) {
       return providerSeries.episodes;
     }
-    return widget.series.episodes.isNotEmpty
-        ? widget.series.episodes
-        : [_currentEpisode];
+    if (widget.series.episodes.isNotEmpty) {
+      return widget.series.episodes;
+    }
+    return [_currentEpisode];
   }
 
   int _getEpisodeIndex(List<Episode> episodes, Episode current) {
+    if (episodes.isEmpty) return 0;
     for (int i = 0; i < episodes.length; i++) {
       if (episodes[i].id == current.id) return i;
+    }
+    final curIdInt = int.tryParse(current.id);
+    if (curIdInt != null) {
+      for (int i = 0; i < episodes.length; i++) {
+        if (int.tryParse(episodes[i].id) == curIdInt) return i;
+      }
+    }
+    if (current.number > 0) {
+      for (int i = 0; i < episodes.length; i++) {
+        if (episodes[i].number == current.number) return i;
+      }
     }
     return 0;
   }
 
   int _getTotalEpisodes(Series? providerSeries, List<Episode> episodes) {
     if (providerSeries != null &&
-        providerSeries.id == widget.series.id &&
+        (providerSeries.id == widget.series.id || widget.series.id.isEmpty) &&
         providerSeries.totalEpisodes > 0) {
       return providerSeries.totalEpisodes;
     }
     if (widget.series.totalEpisodes > 0) return widget.series.totalEpisodes;
+    if (episodes.isNotEmpty) return episodes.length;
     return episodes.length;
   }
 
-  int _calculateInitialIndex(Episode episode, Series series) {
-    for (int i = 0; i < series.episodes.length; i++) {
-      if (series.episodes[i].id == episode.id) return i;
-    }
-    return 0;
+  int _calculateInitialIndex(Episode episode, Series series,
+      [List<Episode>? fullEpisodes]) {
+    final list = (fullEpisodes != null && fullEpisodes.isNotEmpty)
+        ? fullEpisodes
+        : series.episodes;
+    return _getEpisodeIndex(list, episode);
   }
 
   @override
   void initState() {
     super.initState();
     _currentEpisode = widget.episode;
-    final initialIndex = _calculateInitialIndex(widget.episode, widget.series);
+    final initialProviderSeries = context.read<SeriesProvider>().series;
+    final initialEpisodes = _getEpisodes(initialProviderSeries);
+    final initialIndex = _calculateInitialIndex(
+      widget.episode,
+      widget.series,
+      initialEpisodes,
+    );
     _pageController = PageController(initialPage: initialIndex);
     final episodeId = _currentEpisode.id;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      context.read<SeriesProvider>().load(widget.series.id);
+      await context.read<SeriesProvider>().load(widget.series.id);
+      if (!mounted) return;
+      final loadedSeries = context.read<SeriesProvider>().series;
+      if (loadedSeries != null &&
+          (loadedSeries.id == widget.series.id || widget.series.id.isEmpty) &&
+          loadedSeries.episodes.isNotEmpty) {
+        final targetIdx = _getEpisodeIndex(
+          loadedSeries.episodes,
+          _currentEpisode,
+        );
+        if (targetIdx >= 0 && targetIdx < loadedSeries.episodes.length) {
+          final matchedEp = loadedSeries.episodes[targetIdx];
+          if (mounted) {
+            setState(() {
+              _currentEpisode = matchedEp;
+            });
+          }
+        }
+        if (_pageController != null && _pageController!.hasClients) {
+          if (_pageController!.page?.round() != targetIdx) {
+            _pageController!.jumpToPage(targetIdx);
+          }
+        }
+      }
+      _verifyServerAccess(_currentEpisode);
       if (!_ratingsRequested) {
         _ratingsRequested = true;
-        context.read<RatingProvider>().getEpisodeRating(episodeId);
-        context.read<ReviewProvider>().getEpisodeReviews(episodeId, reset: true);
+        context.read<RatingProvider>().getEpisodeRating(_currentEpisode.id);
+        context.read<ReviewProvider>().getEpisodeReviews(_currentEpisode.id, reset: true);
         context.read<ReviewProvider>().loadSettings();
       }
       if (widget.openEpisodesSheet) {
@@ -110,6 +159,42 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       }
     });
     _startEngagementTimer();
+  }
+
+  void _goToNextEpisode([int? count]) {
+    if (_pageController == null || !_pageController!.hasClients) return;
+    final maxCount = count ??
+        _getEpisodes(context.read<SeriesProvider>().series).length;
+    final current = _pageController!.page?.round() ??
+        _getEpisodeIndex(
+          _getEpisodes(context.read<SeriesProvider>().series),
+          _currentEpisode,
+        );
+    final target = current + 1;
+    if (target < maxCount) {
+      _pageController!.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  void _goToPreviousEpisode() {
+    if (_pageController == null || !_pageController!.hasClients) return;
+    final current = _pageController!.page?.round() ??
+        _getEpisodeIndex(
+          _getEpisodes(context.read<SeriesProvider>().series),
+          _currentEpisode,
+        );
+    final target = current - 1;
+    if (target >= 0) {
+      _pageController!.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   @override
@@ -145,6 +230,7 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
     if (_completionSent) return;
     _completionSent = true;
     _sendViewPing(completed: true);
+    _goToNextEpisode();
   }
 
   void _openRating() {
@@ -163,7 +249,6 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       currentEpisodeId: _currentEpisode.id,
       currentEpisodeNumber: epNum,
       onEpisodeSelected: (ep) => _onEpisodeSelected(ep),
-      onSelectEpisode: (ep) => _onEpisodeSelected(ep),
     );
   }
 
@@ -172,34 +257,22 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
     final list = _getEpisodes(providerSeries);
     if (index < 0 || index >= list.length) return;
     final ep = list[index];
-    if (ep.id == _currentEpisode.id) return;
-    _onEpisodeSelected(ep);
-  }
+    if (ep.id == _currentEpisode.id && ep.number == _currentEpisode.number) return;
 
-  void _onEpisodeSelected(Episode ep) {
-    if (!mounted) return;
-    if (ep.id == _currentEpisode.id) return;
     _engagementTimer?.cancel();
     _watchSeconds = 0;
     _completionSent = false;
     _isPlaying = false;
     _ratingsRequested = false;
+
     setState(() {
       _currentEpisode = ep;
     });
 
-    final providerSeries = context.read<SeriesProvider>().series;
-    final episodesList = _getEpisodes(providerSeries);
-    final targetIndex = _getEpisodeIndex(episodesList, ep);
-
-    if (_pageController != null && _pageController!.hasClients) {
-      if (_pageController!.page?.round() != targetIndex) {
-        _pageController!.jumpToPage(targetIndex);
-      }
-    }
-    final episodeId = _currentEpisode.id;
+    final episodeId = ep.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _verifyServerAccess(ep);
       if (!_ratingsRequested) {
         _ratingsRequested = true;
         context.read<RatingProvider>().getEpisodeRating(episodeId);
@@ -207,6 +280,80 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       }
     });
     _startEngagementTimer();
+  }
+
+  void _onEpisodeSelected(Episode ep) {
+    if (!mounted) return;
+    final providerSeries = context.read<SeriesProvider>().series;
+    final episodesList = _getEpisodes(providerSeries);
+    final targetIndex = _getEpisodeIndex(episodesList, ep);
+
+    final resolvedEp = (targetIndex >= 0 && targetIndex < episodesList.length)
+        ? episodesList[targetIndex]
+        : ep;
+
+    _engagementTimer?.cancel();
+    _watchSeconds = 0;
+    _completionSent = false;
+    _isPlaying = false;
+    _ratingsRequested = false;
+
+    setState(() {
+      _currentEpisode = resolvedEp;
+    });
+
+    if (_pageController != null && _pageController!.hasClients) {
+      if (_pageController!.page?.round() != targetIndex) {
+        _pageController!.jumpToPage(targetIndex);
+      }
+    }
+
+    final episodeId = resolvedEp.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _verifyServerAccess(resolvedEp);
+      if (!_ratingsRequested) {
+        _ratingsRequested = true;
+        context.read<RatingProvider>().getEpisodeRating(episodeId);
+        context.read<ReviewProvider>().getEpisodeReviews(episodeId, reset: true);
+      }
+    });
+    _startEngagementTimer();
+  }
+
+  Future<void> _verifyServerAccess(Episode ep) async {
+    if (ep.isFree) return;
+    try {
+      final wallet = context.read<WalletProvider>();
+      final check = await context.read<SeriesProvider>().accessCheck(ep.id);
+      if (!mounted) return;
+      final bool serverUnlocked = check.accessible || wallet.hasActiveAccess;
+      if (_currentEpisode.id == ep.id) {
+        setState(() {
+          _currentEpisode = _currentEpisode.copyWith(
+            isLocked: !serverUnlocked,
+            accessible: serverUnlocked,
+            isAccessible: serverUnlocked,
+            accessReason: check.reason.name,
+          );
+        });
+        if (serverUnlocked) {
+          _checkAccessAndPlay();
+        }
+      }
+    } catch (_) {
+      final wallet = context.read<WalletProvider>();
+      if (wallet.hasActiveAccess && _currentEpisode.id == ep.id) {
+        setState(() {
+          _currentEpisode = _currentEpisode.copyWith(
+            isLocked: false,
+            accessible: true,
+            isAccessible: true,
+          );
+        });
+        _checkAccessAndPlay();
+      }
+    }
   }
 
   void _openReviews() {
@@ -219,6 +366,17 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
   }
 
   Future<void> _toggleSave() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Save',
+        message:
+            'Please sign in or register to save series and episodes to your list.',
+      );
+      if (!loggedIn || !mounted) return;
+    }
+
     final provider = context.read<SeriesProvider>();
     final wasSaved = _isSaved;
     final ok = await provider.toggleSave(
@@ -301,6 +459,16 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       _showSnack('Already downloaded', AppColors.success);
       return;
     }
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Download',
+        message:
+            'Please sign in or register to download episodes for offline viewing.',
+      );
+      if (!loggedIn || !mounted) return;
+    }
     if (!_currentEpisode.effectivelyAccessible) {
       _showPaywall();
       return;
@@ -372,6 +540,19 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
   }
 
   Future<void> _handleCoinUnlock(BuildContext innerContext) async {
+    final auth = innerContext.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final loggedIn = await GuestAuthPrompt.show(
+        innerContext,
+        title: 'Sign In to Unlock',
+        message:
+            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+      );
+      if (!loggedIn || !innerContext.mounted) return;
+      await innerContext.read<WalletProvider>().loadWallet(refresh: true);
+      await innerContext.read<WalletProvider>().loadAccessDashboard(refresh: true);
+    }
+
     final walletProvider = innerContext.read<WalletProvider>();
     final seriesProvider = innerContext.read<SeriesProvider>();
 
@@ -449,11 +630,25 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
             Text('Unlock Episode', style: AppTextStyles.h3),
           ],
         ),
-        content: Text(
-          'Unlock Episode ${_currentEpisode.number} for $requiredCoins coins?\n\n'
-          'Current Balance: $currentCoins coins\n'
-          'Balance After: ${currentCoins - requiredCoins} coins',
-          style: AppTextStyles.body2,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Deduct $requiredCoins coins to unlock this episode?',
+              style: AppTextStyles.body1.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Episode: Episode ${_currentEpisode.number} · ${_currentEpisode.title}',
+              style: AppTextStyles.body3.copyWith(color: AppColors.white),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Current Balance: $currentCoins coins\nBalance After: ${currentCoins - requiredCoins} coins',
+              style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -461,7 +656,7 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
             child: Text('Cancel', style: AppTextStyles.body3.copyWith(color: AppColors.textSecondary)),
           ),
           AdwaButton(
-            label: 'Unlock ($requiredCoins Coins)',
+            label: 'Confirm Unlock',
             size: AdwaButtonSize.sm,
             onPressed: () => Navigator.of(ctx).pop(true),
           ),
@@ -518,6 +713,11 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
 
   void _showPaywall() {
     if (!mounted) return;
+    final wallet = context.read<WalletProvider>();
+    if (wallet.hasActiveAccess) {
+      // User has active unexpired time pass or subscription: bypass paywall entirely
+      return;
+    }
     final item = _toShortItem();
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -530,11 +730,25 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
                 PaywallOverlay(
                   item: item,
                   onUnlockAds: () async {
+                    final auth = innerContext.read<AuthProvider>();
+                    if (!auth.isAuthenticated) {
+                      final loggedIn = await GuestAuthPrompt.show(
+                        innerContext,
+                        title: 'Sign In to Unlock',
+                        message:
+                            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+                      );
+                      if (!loggedIn || !innerContext.mounted) return;
+                      await innerContext
+                          .read<WalletProvider>()
+                          .loadWallet(refresh: true);
+                    }
                     final adService = innerContext.read<AdService>();
                     final ok = await adService.showRewardedAd(
                       innerContext,
                       episodeId: _currentEpisode.id,
-                      episodeTitle: 'Episode ${_currentEpisode.number} · ${_currentEpisode.title}',
+                      episodeTitle:
+                          'Episode ${_currentEpisode.number} · ${_currentEpisode.title}',
                     );
                     if (ok && innerContext.mounted) {
                       Navigator.of(innerContext).maybePop();
@@ -542,10 +756,35 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
                     }
                   },
                   onBuyCoins: () => _handleCoinUnlock(innerContext),
-                  onBuyPass: () => Navigator.of(innerContext)
-                      .pushNamed(AppRoutes.passes),
-                  onSubscribe: () => Navigator.of(innerContext)
-                      .pushNamed(AppRoutes.subscriptions),
+                  onBuyPass: () async {
+                    final auth = innerContext.read<AuthProvider>();
+                    if (!auth.isAuthenticated) {
+                      final loggedIn = await GuestAuthPrompt.show(
+                        innerContext,
+                        title: 'Sign In to Buy Pass',
+                        message:
+                            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+                      );
+                      if (!loggedIn || !innerContext.mounted) return;
+                    }
+                    if (!innerContext.mounted) return;
+                    Navigator.of(innerContext).pushNamed(AppRoutes.passes);
+                  },
+                  onSubscribe: () async {
+                    final auth = innerContext.read<AuthProvider>();
+                    if (!auth.isAuthenticated) {
+                      final loggedIn = await GuestAuthPrompt.show(
+                        innerContext,
+                        title: 'Sign In to Subscribe',
+                        message:
+                            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+                      );
+                      if (!loggedIn || !innerContext.mounted) return;
+                    }
+                    if (!innerContext.mounted) return;
+                    Navigator.of(innerContext)
+                        .pushNamed(AppRoutes.subscriptions);
+                  },
                   onMaybeLater: () =>
                       Navigator.of(innerContext).maybePop(),
                 ),
@@ -583,16 +822,36 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.black,
-      body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical,
-        itemCount: itemCount,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) {
-          if (index != currentIdx) {
-            return Container(color: AppColors.black);
-          }
+      body: SizedBox.expand(
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: (details) {
+            final v = details.primaryVelocity ?? 0.0;
+            if (v < -250) {
+              _goToNextEpisode(itemCount);
+            } else if (v > 250) {
+              _goToPreviousEpisode();
+            }
+          },
+          child: PageView.builder(
+            controller: _pageController,
+            dragStartBehavior: DragStartBehavior.down,
+            physics: const SmoothVideoSnapScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+            ),
+            scrollDirection: Axis.vertical,
+            itemCount: itemCount,
+            onPageChanged: _onPageChanged,
+            itemBuilder: (context, index) {
           final ep = episodesList[index];
+          final isCurrent = index == currentIdx;
+          final isAdjacent = (index == currentIdx - 1 || index == currentIdx + 1);
+
+          if (!isCurrent && !isAdjacent) {
+            return const ColoredBox(color: AppColors.black);
+          }
           final epIdInt = int.tryParse(ep.id);
           final isDownloaded =
               epIdInt != null && downloadProvider.isDownloaded(epIdInt);
@@ -604,6 +863,11 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
                   ? DownloadStatus.downloading
                   : DownloadStatus.idle);
 
+          final wallet = context.watch<WalletProvider>();
+          final bool isAccessible =
+              ep.effectivelyAccessible || wallet.hasActiveAccess;
+          final epNum = ep.number > 0 ? ep.number : index + 1;
+
           return UnifiedVideoPlayer(
             key: ValueKey('ep_player_${ep.id}_${ep.videoUrl}'),
             presentation: VideoPlayerPresentation.fullscreen,
@@ -612,8 +876,9 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
             description: ep.description.isNotEmpty
                 ? ep.description
                 : widget.series.description,
-            currentEpisode: 'EP.$activeEpNum',
+            currentEpisode: 'EP.$epNum',
             totalEpisodes: totalEps,
+            seriesId: widget.series.id,
             ratingCount: ep.ratingCount ?? 0,
             isSaved: _isSaved,
             onRate: _openRating,
@@ -623,7 +888,7 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
             onBack: () => Navigator.of(context).maybePop(),
             onSearch: () => Navigator.of(context).pushNamed(AppRoutes.search),
             onReviews: _openReviews,
-            isLocked: !ep.effectivelyAccessible,
+            isLocked: !isAccessible,
             onUnlockAds: () async {
               final adService = context.read<AdService>();
               final ok = await adService.showRewardedAd(
@@ -649,13 +914,15 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
             knownDuration: Duration(seconds: ep.durationSeconds),
             onPlayingChanged: _onPlayingChanged,
             onCompleted: _onCompleted,
-            autoPlay: true,
+            autoPlay: isCurrent,
             looping: false,
             onDownload: _onDownload,
             downloadStatus: downloadStatus,
             isDownloaded: isDownloaded,
           );
         },
+      ),
+      ),
       ),
     );
   }

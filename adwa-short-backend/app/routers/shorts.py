@@ -25,6 +25,7 @@ _ACCESS_REASON_MAP = {
     AccessResult.ALLOWED_PASS: ("pass", True),
     AccessResult.ALLOWED_SUBSCRIPTION: ("subscription", True),
     AccessResult.ALLOWED_COINS: ("coins", True),
+    AccessResult.BLOCKED_NEED_LOGIN: ("need_login", False),
     AccessResult.BLOCKED_NEED_AD: ("need_ad", False),
     AccessResult.BLOCKED_NEED_COINS: ("need_coins", False),
     AccessResult.BLOCKED_NEED_PASS: ("need_pass", False),

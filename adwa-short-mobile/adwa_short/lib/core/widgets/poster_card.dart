@@ -62,6 +62,7 @@ class PosterCard extends StatelessWidget {
     final w = width;
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.translucent,
       child: w == null ? content : SizedBox(width: w, child: content),
     );
   }

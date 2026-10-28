@@ -6,9 +6,12 @@ import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/time_pass.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/cbe_checkout_sheet.dart';
 
 class PassesScreen extends StatefulWidget {
   const PassesScreen({super.key});
@@ -18,54 +21,279 @@ class PassesScreen extends StatefulWidget {
 }
 
 class _PassesScreenState extends State<PassesScreen> {
+  bool _isAuth(BuildContext context) {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      return auth.isAuthenticated;
+    } catch (_) {
+      return true;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = context.read<WalletProvider>();
       if (p.passesStatus == WalletLoadStatus.idle) p.loadPasses();
+      if (_isAuth(context)) {
+        p.loadAccessDashboard();
+      }
     });
   }
 
   Future<void> _onPurchase(TimePass pass) async {
-    final confirmed = await showDialog<bool>(
+    if (!_isAuth(context)) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Buy Pass',
+        message:
+            'Please sign in or register to buy time passes and enjoy unlimited access.',
+      );
+      if (!loggedIn || !mounted) return;
+      await context.read<WalletProvider>().loadWallet(refresh: true);
+      await context.read<WalletProvider>().loadAccessDashboard(refresh: true);
+    }
+
+    final wp = context.read<WalletProvider>();
+    final hasActive = wp.activePass?.hasActivePass == true && (wp.activePass?.remainingSeconds ?? 0) > 0;
+
+    final method = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Confirm purchase', style: AppTextStyles.h3),
-        content: Text(
-          'Buy "${pass.name}" (${pass.shortDuration}) for '
-          '${Formatters.birr(pass.priceBirr)}?',
-          style: AppTextStyles.body2,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                hasActive
+                    ? 'Extend Pass (+${pass.shortDuration})'
+                    : 'Unlock "${pass.name}" (${pass.shortDuration})',
+                style: AppTextStyles.h3.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hasActive
+                    ? 'Stacks +${pass.shortDuration} onto your current pass · Price: ${Formatters.birr(pass.priceBirr)}'
+                    : 'Price: ${Formatters.birr(pass.priceBirr)}',
+                style: AppTextStyles.body2.copyWith(
+                  color: AppColors.bloodRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Option 1: CBE Birr (Automated)
+              InkWell(
+                onTap: () => Navigator.of(ctx).pop('cbe'),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.black,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.bloodRed, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.bloodRed.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_rounded,
+                          color: AppColors.bloodRed,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'CBE / CBE Birr',
+                                  style: AppTextStyles.body1.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.bloodRed,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'AUTOMATED',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Instant checkout via CBE Birr App or USSD',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Option 2: Wallet Balance
+              InkWell(
+                onTap: () => Navigator.of(ctx).pop('wallet'),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.black,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: AppColors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Wallet Balance',
+                              style: AppTextStyles.body1.copyWith(
+                                color: AppColors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Pay from deposited Birr funds',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.bloodRed,
-              foregroundColor: AppColors.white,
-            ),
-            child: const Text('Confirm'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
-    final ok = await context.read<WalletProvider>().purchasePass(pass);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok
-            ? 'Pass activated — enjoy unlimited access'
-            : 'Purchase failed. Please try again.'),
-        backgroundColor: ok ? AppColors.success : AppColors.error,
-      ),
-    );
-    if (ok) Navigator.of(context).maybePop();
+
+    if (method == null || !mounted) return;
+
+    if (method == 'cbe') {
+      final wp = context.read<WalletProvider>();
+      final initRes = await wp.initiateCbePayment(
+        itemType: 'time_pass',
+        itemId: pass.id,
+        amountBirr: pass.priceBirr,
+      );
+      if (!mounted) return;
+      if (initRes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to initiate CBE checkout. Please try again.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      final success = await CbeCheckoutSheet.show(
+        context,
+        initResult: initRes,
+        title: pass.name,
+        amountBirr: pass.priceBirr,
+      );
+      if (success == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(hasActive
+                ? 'Pass extended (+${pass.shortDuration}) — duration stacked successfully!'
+                : 'Pass activated instantly — enjoy unlimited access!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        Navigator.of(context).maybePop();
+      }
+    } else if (method == 'wallet') {
+      final ok = await context.read<WalletProvider>().purchasePass(pass);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? (hasActive
+                  ? 'Pass extended (+${pass.shortDuration}) — duration stacked successfully!'
+                  : 'Pass activated — enjoy unlimited access')
+              : 'Purchase failed. Insufficient Birr balance or server error.'),
+          backgroundColor: ok ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (ok) Navigator.of(context).maybePop();
+    }
   }
 
   @override
@@ -144,6 +372,8 @@ class _PassesScreenState extends State<PassesScreen> {
   }
 
   Widget _passCard(TimePass pass) {
+    final wp = context.watch<WalletProvider>();
+    final hasActive = wp.activePass?.hasActivePass == true && (wp.activePass?.remainingSeconds ?? 0) > 0;
     final days = pass.durationHours ~/ 24;
     final isHourly = pass.durationHours < 24;
 
@@ -296,7 +526,7 @@ class _PassesScreenState extends State<PassesScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Buy',
+                          hasActive ? 'Extend' : 'Buy',
                           style: AppTextStyles.label.copyWith(
                             color: AppColors.white,
                             fontWeight: FontWeight.bold,

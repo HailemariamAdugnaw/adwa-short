@@ -78,9 +78,9 @@ async def test_series_detail(client, admin_headers):
 
 async def test_episode_access_free(client, admin_headers, auth_headers):
     _, series_id = await _seed_category_and_series(client, admin_headers)
-    res = await client.get("/episodes")
-    ep_id = res.json()[0]["id"]
-    acc = await client.get(f"/episodes/{ep_id}/access", headers=auth_headers)
+    res = await client.get(f"/episodes?series_id={series_id}")
+    ep = next(e for e in res.json() if e["episode_number"] == 1)
+    acc = await client.get(f"/episodes/{ep['id']}/access", headers=auth_headers)
     assert acc.status_code == 200
     assert acc.json()["access"] == "allowed"
     assert acc.json()["method"] == "free"

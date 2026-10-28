@@ -38,12 +38,21 @@ class ApiConstants {
   static const String coinsPurchase = '/coins/purchase';
   static const String passes = '/passes';
   static const String passesPurchase = '/passes/purchase';
+  static const String activePass = '/passes/active';
   static const String subscriptionsPlans = '/subscriptions/plans';
   static const String subscriptionsSubscribe = '/subscriptions/subscribe';
+  static const String activeSubscription = '/subscriptions/active';
+  static const String subscriptionsUnsubscribe = '/subscriptions/unsubscribe';
+  static const String userAccessDashboard = '/subscriptions/user-access';
   static const String adUnlocksRule = '/ad-unlocks/rule';
   static const String adUnlocksWatched = '/ad-unlocks/watched';
   static const String adsS2sCallback = '/api/v1/ads/callback';
   static String episodeAccessCheck(String id) => '/episodes/$id/access';
+
+  // Commercial Bank of Ethiopia (CBE / CBE Birr) Automated Payments
+  static const String cbeInitiate = '/api/v1/payments/cbe/initiate';
+  static String cbeOrderStatus(String orderId) => '/api/v1/payments/cbe/order/$orderId';
+  static String cbeSimulatePayment(String orderId) => '/api/v1/payments/cbe/simulate-payment/$orderId';
 
   static const String downloadTokens = '/downloads/tokens';
   static const String downloadFile = '/downloads/file';

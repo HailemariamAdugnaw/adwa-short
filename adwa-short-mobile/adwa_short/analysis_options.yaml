@@ -24,13 +24,10 @@ analyzer:
     strict-casts: false
     strict-inference: false
     strict-raw-types: false
-    errors:
-      # Treat missing returns and asset path issues as warnings, not errors
-      missing_return: warning
-      invalid_annotation_target: ignore
-    strong-mode:
-      implicit-casts: false
-      implicit-dynamic: false
+  errors:
+    # Treat missing returns and asset path issues as warnings, not errors
+    missing_return: warning
+    invalid_annotation_target: ignore
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

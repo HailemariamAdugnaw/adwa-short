@@ -4,11 +4,15 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/adwa_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/wallet.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/cbe_checkout_sheet.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({
@@ -27,58 +31,117 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
+  bool _isAuth(BuildContext context, {bool listen = false}) {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: listen);
+      return auth.isAuthenticated;
+    } catch (_) {
+      return true;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<WalletProvider>().loadWallet(refresh: false);
+      if (_isAuth(context, listen: false)) {
+        context.read<WalletProvider>().loadWallet(refresh: false);
+      }
     });
   }
 
   Future<void> _onRefresh() async {
-    await context.read<WalletProvider>().loadWallet(refresh: true);
+    if (_isAuth(context, listen: false)) {
+      await context.read<WalletProvider>().loadWallet(refresh: true);
+    }
   }
 
   Future<void> _onDeposit() async {
+    if (!_isAuth(context, listen: false)) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Deposit',
+        message:
+            'Please sign in or register to manage your CBE Birr wallet and add funds.',
+      );
+      if (!loggedIn || !mounted) return;
+      await context.read<WalletProvider>().loadWallet(refresh: true);
+    }
+
     final amount = await _showDepositDialog();
-    if (amount == null) return;
-    final ok = await context.read<WalletProvider>().deposit(amount);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok
-            ? 'Deposit of ${Formatters.birr(amount)} successful'
-            : 'Deposit failed. Please try again.'),
-        backgroundColor: ok ? AppColors.success : AppColors.error,
-      ),
+    if (amount == null || amount <= 0 || !mounted) return;
+
+    final wp = context.read<WalletProvider>();
+    final initRes = await wp.initiateCbePayment(
+      itemType: 'wallet_deposit',
+      amountBirr: amount,
     );
+    if (!mounted) return;
+    if (initRes == null) {
+      // Fallback to direct deposit
+      final ok = await wp.deposit(amount);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Deposit of ${Formatters.birr(amount)} successful'
+              : 'Deposit failed. Please try again.'),
+          backgroundColor: ok ? AppColors.success : AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final success = await CbeCheckoutSheet.show(
+      context,
+      initResult: initRes,
+      title: 'Wallet Deposit',
+      amountBirr: amount,
+    );
+    if (success == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Deposit of ${Formatters.birr(amount)} confirmed instantly!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   Future<num?> _showDepositDialog() async {
-    final controller = TextEditingController(text: '50');
+    final controller = TextEditingController(text: '100');
     return showDialog<num>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          title: Text('Deposit Wallet', style: AppTextStyles.h3),
+          title: Row(
+            children: [
+              const Icon(Icons.account_balance_rounded, color: AppColors.bloodRed, size: 24),
+              const SizedBox(width: 10),
+              Text('Deposit via CBE Birr', style: AppTextStyles.h3),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Top up your wallet with Telebirr. '
-                'This is a demo integration — no real charge is made.',
-                style: AppTextStyles.body3,
+                'Top up your wallet automatically with Commercial Bank of Ethiopia (CBE Birr). '
+                'Instant confirmation without receipt uploads.',
+                style: AppTextStyles.body3.copyWith(color: AppColors.white.withValues(alpha: 0.8)),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               TextField(
                 controller: controller,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  prefixText: 'Birr ',
+                  prefixText: 'ETB ',
                   border: OutlineInputBorder(),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.bloodRed),
+                  ),
                 ),
                 autofocus: true,
               ),
@@ -87,14 +150,18 @@ class _WalletScreenState extends State<WalletScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Cancel'),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
             ),
             ElevatedButton(
               onPressed: () {
                 final v = num.tryParse(controller.text.trim());
                 Navigator.of(ctx).pop(v);
               },
-              child: const Text('Deposit'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.bloodRed,
+                foregroundColor: AppColors.white,
+              ),
+              child: const Text('Continue to CBE'),
             ),
           ],
         );
@@ -104,6 +171,18 @@ class _WalletScreenState extends State<WalletScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAuth = _isAuth(context, listen: true);
+    if (!isAuth) {
+      return Scaffold(
+        backgroundColor: AppColors.black,
+        appBar: AppBar(
+          title: const Text('My Wallet'),
+        ),
+        body: SafeArea(
+          child: _guestView(context),
+        ),
+      );
+    }
     final p = context.watch<WalletProvider>();
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -126,6 +205,70 @@ class _WalletScreenState extends State<WalletScreen> {
             WalletLoadStatus.success =>
               _content(p),
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _guestView(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.bloodRed.withValues(alpha: 0.15),
+                border: Border.all(color: AppColors.bloodRed, width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66C8102E),
+                    blurRadius: 24,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Colors.white,
+                size: 40,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Sign In to Access Wallet',
+              style: AppTextStyles.h2.copyWith(color: AppColors.white),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Your CBE Birr balance, coin top-ups, and transaction history are linked to your registered account.',
+              style:
+                  AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            AdwaButton(
+              label: 'Sign In / Register',
+              icon: Icons.login_rounded,
+              expanded: true,
+              onPressed: () async {
+                final ok = await GuestAuthPrompt.show(
+                  context,
+                  title: 'Sign In to Access Wallet',
+                  message:
+                      'Please sign in or register to manage your CBE Birr wallet and add funds.',
+                );
+                if (ok && mounted) {
+                  context.read<WalletProvider>().loadWallet(refresh: true);
+                }
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -185,11 +328,15 @@ class _WalletScreenState extends State<WalletScreen> {
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _onDeposit,
-          icon: const Icon(Icons.account_balance_wallet_outlined,
+          icon: const Icon(Icons.account_balance_rounded,
               color: AppColors.bloodRed),
-          label: const Text('Deposit Wallet (Telebirr demo)'),
+          label: const Text(
+            'Deposit via Commercial Bank of Ethiopia (CBE)',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.bloodRed,
+            foregroundColor: AppColors.white,
+            backgroundColor: AppColors.surface,
             side: const BorderSide(color: AppColors.bloodRed, width: 1.4),
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(

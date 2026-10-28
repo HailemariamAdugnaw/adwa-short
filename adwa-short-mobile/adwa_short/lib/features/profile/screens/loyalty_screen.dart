@@ -7,8 +7,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/adwa_button.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/loyalty_grant.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/loyalty_provider.dart';
 
 class LoyaltyScreen extends StatefulWidget {
@@ -19,22 +21,48 @@ class LoyaltyScreen extends StatefulWidget {
 }
 
 class _LoyaltyScreenState extends State<LoyaltyScreen> {
+  bool _isAuth(BuildContext context, {bool listen = false}) {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: listen);
+      return auth.isAuthenticated;
+    } catch (_) {
+      return true; // default for isolated widget tests without AuthProvider
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LoyaltyProvider>().load();
+      if (_isAuth(context, listen: false)) {
+        context.read<LoyaltyProvider>().load();
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isAuth = _isAuth(context, listen: true);
+    if (!isAuth) {
+      return Scaffold(
+        backgroundColor: AppColors.black,
+        appBar: AppBar(
+          backgroundColor: AppColors.black,
+          title: const Text('Loyalty Rewards & Perks',
+              style: TextStyle(color: AppColors.white)),
+          iconTheme: const IconThemeData(color: AppColors.white),
+        ),
+        body: SafeArea(child: _guestView(context)),
+      );
+    }
+
     final p = context.watch<LoyaltyProvider>();
     return Scaffold(
       backgroundColor: AppColors.black,
       appBar: AppBar(
         backgroundColor: AppColors.black,
-        title: const Text('Loyalty Rewards & Perks', style: TextStyle(color: AppColors.white)),
+        title: const Text('Loyalty Rewards & Perks',
+            style: TextStyle(color: AppColors.white)),
         iconTheme: const IconThemeData(color: AppColors.white),
         actions: [
           IconButton(
@@ -49,13 +77,80 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> {
           backgroundColor: AppColors.surfaceElevated,
           onRefresh: () => p.load(),
           child: switch (p.status) {
-            LoyaltyStatus.idle || LoyaltyStatus.loading => _skeleton(),
+            LoyaltyStatus.idle ||
+            LoyaltyStatus.loading =>
+              _skeleton(),
             LoyaltyStatus.error => ErrorView(
                 message: p.errorMessage ?? 'Failed to load rewards',
                 onRetry: () => p.load(),
               ),
             LoyaltyStatus.success => _content(p),
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _guestView(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.bloodRed.withValues(alpha: 0.15),
+                border: Border.all(color: AppColors.bloodRed, width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66C8102E),
+                    blurRadius: 22,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.card_giftcard_outlined,
+                color: Colors.white,
+                size: 38,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Unlock Loyalty Rewards',
+              style: AppTextStyles.h2
+                  .copyWith(color: AppColors.white, fontSize: 19),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Sign in to earn coins, claim daily streaks, and unlock free premium episode perks.',
+              style:
+                  AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 26),
+            AdwaButton(
+              label: 'Sign In / Register',
+              icon: Icons.login_rounded,
+              expanded: true,
+              onPressed: () async {
+                final ok = await GuestAuthPrompt.show(
+                  context,
+                  title: 'Sign In for Loyalty Rewards',
+                  message:
+                      'Please sign in or register to view and claim your loyalty rewards.',
+                );
+                if (ok && mounted) {
+                  context.read<LoyaltyProvider>().load();
+                }
+              },
+            ),
+          ],
         ),
       ),
     );

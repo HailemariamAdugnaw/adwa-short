@@ -14,6 +14,8 @@ from app.models.loyalty import LoyaltyRewardConfig, LoyaltyRewardGrant
 from app.models.subscription import TimePass, TimePassPurchase
 from app.models.user import User
 from app.models.wallet import Wallet, WalletTransaction
+from app.services.monetization import get_user_active_pass
+from app.utils.time import ensure_utc, utcnow
 from app.schemas.loyalty import (
     LoyaltyClaimOut,
     LoyaltyConfigOut,
@@ -178,8 +180,10 @@ async def claim_loyalty_reward(
 
     # 3. Grant free daily access pass if configured
     if cfg.daily_access_days > 0:
-        # Resolve or create a default pass record
-        p_res = await db.execute(select(TimePass).where(TimePass.is_active.is_(True)).limit(1))
+        # Resolve or create a dedicated loyalty pass record (never hijack Hourly Pass or paid passes)
+        p_res = await db.execute(
+            select(TimePass).where(TimePass.name == "Loyalty Pass", TimePass.price_birr == 0).limit(1)
+        )
         t_pass = p_res.scalar_one_or_none()
         if t_pass is None:
             t_pass = TimePass(
@@ -191,8 +195,10 @@ async def claim_loyalty_reward(
             db.add(t_pass)
             await db.flush()
 
-        now = datetime.now(timezone.utc)
-        expires = now + timedelta(days=cfg.daily_access_days)
+        now = utcnow()
+        active_pass = await get_user_active_pass(db, user.id)
+        base_time = ensure_utc(active_pass.expires_at) if (active_pass and ensure_utc(active_pass.expires_at) > now) else now
+        expires = base_time + timedelta(days=cfg.daily_access_days)
         db.add(
             TimePassPurchase(
                 user_id=user.id,

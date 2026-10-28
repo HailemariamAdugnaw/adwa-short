@@ -9,7 +9,6 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
-import '../../../models/access_check.dart';
 import '../providers/my_list_provider.dart';
 
 class HistoryTab extends StatelessWidget {

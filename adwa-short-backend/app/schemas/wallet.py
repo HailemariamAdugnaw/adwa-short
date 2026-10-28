@@ -36,7 +36,7 @@ class CoinPackageOut(CoinPackageBase):
 
 class DepositRequest(BaseModel):
     amount_birr: float = Field(gt=0)
-    provider: str = "telebirr"
+    provider: str = "cbe"
     phone: Optional[str] = None
 
 
@@ -62,9 +62,12 @@ class CoinSpendResponse(BaseModel):
 
 class ManualDepositRequest(BaseModel):
     user_id: int
-    amount_birr: float = Field(gt=0)
-    coins_credited: int = 0
+    amount_birr: Optional[float] = Field(default=0.0, ge=0.0)
+    coins_credited: Optional[int] = Field(default=0, ge=0)
     notes: Optional[str] = None
+
+
+TopUpRequest = ManualDepositRequest
 
 
 class ManualDepositOut(BaseModel):
@@ -78,3 +81,6 @@ class ManualDepositOut(BaseModel):
     created_at: datetime
     user_display_name: Optional[str] = None
     user_phone: Optional[str] = None
+
+
+TopUpResponse = ManualDepositOut

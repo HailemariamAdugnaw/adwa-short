@@ -6,10 +6,12 @@ import 'core/router/app_router.dart';
 import 'core/theme/colors.dart';
 import 'core/theme/theme.dart';
 import 'core/widgets/bottom_nav_bar.dart';
+import 'core/widgets/connection_lost_view.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/register_screen.dart';
 import 'features/auth/screens/splash_screen.dart';
+import 'features/auth/screens/welcome_screen.dart';
 import 'features/downloads/screens/downloads_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/my_list/screens/my_list_screen.dart';
@@ -48,6 +50,8 @@ class AdwaShortApp extends StatelessWidget {
     switch (settings.name) {
       case AppRoutes.splash:
         return MaterialPageRoute(builder: (context) => const SplashScreen());
+      case AppRoutes.welcome:
+        return MaterialPageRoute(builder: (context) => const WelcomeScreen());
       case AppRoutes.login:
         return MaterialPageRoute(builder: (context) => const LoginScreen());
       case AppRoutes.register:
@@ -139,6 +143,17 @@ class AdwaShortApp extends StatelessWidget {
             onOpenDownloads: () =>
                 Navigator.of(context).pushNamed(AppRoutes.downloads),
           ),
+        );
+      case AppRoutes.connectionLost:
+        final args = settings.arguments;
+        Future<void> Function()? onRetry;
+        if (args is Future<void> Function()) {
+          onRetry = args;
+        } else if (args is VoidCallback) {
+          onRetry = () async => args();
+        }
+        return MaterialPageRoute(
+          builder: (context) => ConnectionLostScreen(onRetry: onRetry),
         );
     }
     return null;

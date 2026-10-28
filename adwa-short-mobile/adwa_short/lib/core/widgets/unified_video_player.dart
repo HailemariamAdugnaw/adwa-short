@@ -14,6 +14,7 @@ import '../theme/colors.dart';
 import '../theme/text_styles.dart';
 import '../utils/formatters.dart';
 import '../utils/video_format.dart';
+import 'connection_lost_view.dart';
 
 enum VideoPlayerPresentation { embedded, fullscreen }
 
@@ -44,6 +45,7 @@ class UnifiedVideoPlayer extends StatefulWidget {
     this.onMaybeLater,
     this.posterUrl,
     this.seriesTitle,
+    this.seriesId,
     this.episodeId,
     this.accessReason,
     this.averageRating,
@@ -82,6 +84,7 @@ class UnifiedVideoPlayer extends StatefulWidget {
   final VoidCallback? onMaybeLater;
   final String? posterUrl;
   final String? seriesTitle;
+  final String? seriesId;
   final String? episodeId;
   final String? accessReason;
   final double? averageRating;
@@ -99,7 +102,8 @@ class UnifiedVideoPlayer extends StatefulWidget {
   State<UnifiedVideoPlayer> createState() => _UnifiedVideoPlayerState();
 }
 
-class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
+class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isPlaying = false;
@@ -116,7 +120,6 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   Duration _duration = Duration.zero;
   bool _toggleInProgress = false;
   bool _isScrubbing = false;
-  double _scrubPositionMs = 0.0;
   bool _isSeeking = false;
   bool _wasPlayingBeforeScrub = false;
   Timer? _seekDebounceTimer;
@@ -157,9 +160,32 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _duration = widget.knownDuration;
     if (!widget.isLocked) {
       _initPlayer();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final c = _controller;
+    if (c == null || !c.value.isInitialized || _isDisposed) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (c.value.isPlaying) {
+        c.pause();
+        if (mounted) setState(() => _isPlaying = false);
+        widget.onPlayingChanged?.call(false);
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (widget.autoPlay && !c.value.isPlaying) {
+        c.play();
+        if (mounted) setState(() => _isPlaying = true);
+        widget.onPlayingChanged?.call(true);
+      }
     }
   }
 
@@ -183,6 +209,24 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         setState(() {
           _duration = widget.knownDuration;
         });
+      }
+      if (widget.autoPlay != oldWidget.autoPlay) {
+        final c = _controller;
+        if (c != null && c.value.isInitialized && !_isDisposed) {
+          if (widget.autoPlay) {
+            if (!c.value.isPlaying) {
+              c.play();
+              if (mounted) setState(() => _isPlaying = true);
+              widget.onPlayingChanged?.call(true);
+            }
+          } else {
+            if (c.value.isPlaying) {
+              c.pause();
+              if (mounted) setState(() => _isPlaying = false);
+              widget.onPlayingChanged?.call(false);
+            }
+          }
+        }
       }
     }
   }
@@ -229,7 +273,6 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         _isScrubbing = false;
         _isSeeking = false;
         _wasPlayingBeforeScrub = false;
-        _scrubPositionMs = 0.0;
       });
     }
     await _disposeController();
@@ -552,7 +595,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   ShortItem _toShortItem() {
     return ShortItem(
       id: widget.episodeId ?? widget.title,
-      seriesId: '',
+      seriesId: widget.seriesId ?? '',
       episodeId: widget.episodeId,
       title: widget.title,
       verticalVideoUrl: widget.videoUrl,
@@ -586,7 +629,6 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       _isScrubbing = false;
       _isSeeking = false;
       _wasPlayingBeforeScrub = false;
-      _scrubPositionMs = 0.0;
     });
     _hideControlsTimer?.cancel();
     _stopProgressTimer();
@@ -601,6 +643,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   @override
   void dispose() {
     _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
     _seekDebounceTimer?.cancel();
     _hideControlsTimer?.cancel();
     _stopProgressTimer();
@@ -618,11 +661,12 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         _buildVideo(),
         _buildGradientOverlay(),
         if (_hasTopBar) _buildTopBar(),
-        if (_isInitialized && _controller != null && !_hasError) ...[
+        if (!_hasError) ...[
           _buildRightActionBar(),
           _buildBottomInfo(),
-          _buildProgressBar(),
         ],
+        if (_isInitialized && _controller != null && !_hasError)
+          _buildProgressBar(),
         if (_showControls &&
             _isInitialized &&
             _controller != null &&
@@ -631,8 +675,10 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
         if (!_isInitialized && !_hasError) _buildLoading(),
       ],
     );
-    if (_isEmbedded) return ColoredBox(color: AppColors.black, child: player);
-    return Scaffold(backgroundColor: AppColors.black, body: player);
+    return ColoredBox(
+      color: AppColors.black,
+      child: SizedBox.expand(child: player),
+    );
   }
 
   bool get _hasTopBar =>
@@ -644,8 +690,10 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
     if (!_isInitialized || _controller == null) {
       return GestureDetector(
         onTap: _togglePlayPause,
-        behavior: HitTestBehavior.opaque,
-        child: Container(color: AppColors.black),
+        behavior: HitTestBehavior.translucent,
+        child: const SizedBox.expand(
+          child: ColoredBox(color: AppColors.black),
+        ),
       );
     }
     final size = _controller!.value.size;
@@ -653,7 +701,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
     final vh = size.height <= 0 ? 1.0 : size.height.toDouble();
     return GestureDetector(
       onTap: _togglePlayPause,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: RepaintBoundary(
         child: SizedBox.expand(
           child: FittedBox(
@@ -716,7 +764,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   Widget _circleButton(IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: Container(
         width: 40,
         height: 40,
@@ -768,6 +816,7 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
       right: 76,
       child: ShortBottomInfo(
         item: _toShortItem(),
+        currentEpisodeNumber: _parseEpisodeNumber(),
         totalEpisodes: widget.totalEpisodes,
         onShowEpisodes: widget.onEpisodes,
         previewMode: _isEmbedded,
@@ -803,19 +852,17 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
               ? _position.inMilliseconds.toDouble().clamp(0.0, sliderMax)
               : 0.0;
 
-          return Container(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
-            child: Column(
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {},
+            child: Container(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragStart: (_) {},
-                  onVerticalDragUpdate: (_) {},
-                  onVerticalDragEnd: (_) {},
-                  child: SizedBox(
-                    height: 36,
-                    child: SliderTheme(
+                SizedBox(
+                  height: 36,
+                  child: SliderTheme(
                       data: SliderThemeData(
                         trackHeight: 3.0,
                         thumbShape: const RoundSliderThumbShape(
@@ -929,7 +976,6 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
                       ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 2),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -954,17 +1000,18 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
                 ),
               ],
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   Widget _buildCenterIndicator() {
     return Center(
       child: GestureDetector(
         onTap: _togglePlayPause,
-        behavior: HitTestBehavior.opaque,
+        behavior: HitTestBehavior.translucent,
         child: Container(
           width: 72,
           height: 72,
@@ -999,82 +1046,30 @@ class _UnifiedVideoPlayerState extends State<UnifiedVideoPlayer> {
   }
 
   Widget _buildLockedView() {
-    return Scaffold(
-      backgroundColor: AppColors.black,
-      body: PaywallOverlay(
-        item: _toShortItem(),
-        onUnlockAds: widget.onUnlockAds,
-        onBuyCoins: widget.onUnlockCoins,
-        onBuyPass: widget.onUnlockPass,
-        onSubscribe: widget.onUnlockSubscribe,
-        onMaybeLater: widget.onMaybeLater,
-      ),
+    final paywall = PaywallOverlay(
+      item: _toShortItem(),
+      onUnlockAds: widget.onUnlockAds,
+      onBuyCoins: widget.onUnlockCoins,
+      onBuyPass: widget.onUnlockPass,
+      onSubscribe: widget.onUnlockSubscribe,
+      onMaybeLater: widget.onMaybeLater,
+    );
+    return ColoredBox(
+      color: AppColors.black,
+      child: SizedBox.expand(child: paywall),
     );
   }
 
   Widget _buildErrorView() {
-    return Scaffold(
-      backgroundColor: AppColors.black,
-      body: Container(
-        color: Colors.black.withValues(alpha: 0.75),
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 60),
-                const Icon(
-                  Icons.error_outline_rounded,
-                  color: AppColors.error,
-                  size: 40,
-                ),
-                const SizedBox(height: 12),
-                const Text('Video unavailable', style: AppTextStyles.h3),
-                const SizedBox(height: 6),
-                Text(
-                  AdwaVideoFormat.supportHint(_videoFormat),
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.body2,
-                ),
-                if (_errorMessage.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: Text(
-                      _errorMessage,
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  onPressed: _retry,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Retry'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.bloodRed,
-                    foregroundColor: AppColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 60),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return ConnectionLostView(
+      isFullScreen: false,
+      onRetry: () async {
+        _retry();
+      },
+      title: 'Connection Lost',
+      subtitle: _errorMessage.isNotEmpty
+          ? _errorMessage
+          : "Can't connect to video server, please try\nagain later.",
     );
   }
 }

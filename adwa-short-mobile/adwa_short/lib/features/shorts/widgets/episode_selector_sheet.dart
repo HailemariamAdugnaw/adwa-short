@@ -60,13 +60,27 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   int _activeTab = 0;
   bool _loading = true;
   Series? _series;
+  late final ScrollController _scrollController;
 
   static const int _perPage = 25;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
+    final initialSeries = context.read<SeriesProvider>().series;
+    if (initialSeries != null && initialSeries.id == widget.seriesId) {
+      _series = initialSeries;
+      _loading = false;
+      _initActiveTab();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSeries());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSeries() async {
@@ -117,10 +131,17 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   }
 
   bool _isCurrent(Episode ep) {
-    if (widget.currentEpisodeId != null && ep.id == widget.currentEpisodeId) {
+    if (widget.currentEpisodeId != null &&
+        widget.currentEpisodeId!.isNotEmpty &&
+        ep.id == widget.currentEpisodeId) {
+      return true;
+    }
+    final curIdInt = int.tryParse(widget.currentEpisodeId ?? '');
+    if (curIdInt != null && int.tryParse(ep.id) == curIdInt) {
       return true;
     }
     if (widget.currentEpisodeNumber != null &&
+        widget.currentEpisodeNumber! > 0 &&
         ep.number == widget.currentEpisodeNumber) {
       return true;
     }
@@ -150,9 +171,9 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final maxH = mediaQuery.size.height * 0.7;
+    final sheetHeight = mediaQuery.size.height * 0.72;
     return Container(
-      constraints: BoxConstraints(maxHeight: maxH),
+      height: sheetHeight,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -161,27 +182,27 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
         ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           _grabber(),
-          if (_loading || _series == null)
-            const Padding(
-              padding: EdgeInsets.all(40),
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: AppColors.bloodRed,
+          if (_loading && _series == null)
+            const Expanded(
+              child: Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.bloodRed,
+                  ),
                 ),
               ),
             )
-          else ...[
+          else if (_series != null) ...[
             _header(_series!),
             const Divider(color: AppColors.divider, height: 1),
             _tabs(_series!),
             const Divider(color: AppColors.divider, height: 1),
-            Flexible(
+            Expanded(
               child: _episodesGrid(_series!),
             ),
           ],
@@ -295,14 +316,22 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
       height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         itemCount: count,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final active = i == _activeTab;
           return GestureDetector(
-            onTap: () => setState(() => _activeTab = i),
-            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              setState(() => _activeTab = i);
+              if (_scrollController.hasClients) {
+                _scrollController.jumpTo(0);
+              }
+            },
+            behavior: HitTestBehavior.translucent,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
@@ -345,9 +374,12 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
       );
     }
     return GridView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-      shrinkWrap: true,
-      physics: const ClampingScrollPhysics(),
+      shrinkWrap: false,
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 5,
         mainAxisSpacing: 10,
@@ -364,9 +396,12 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
           isCurrent: isCurrent,
           isLocked: locked,
           onTap: () {
-            widget.onEpisodeSelected?.call(ep);
-            widget.onSelectEpisode?.call(ep);
             Navigator.of(context).pop();
+            if (widget.onEpisodeSelected != null) {
+              widget.onEpisodeSelected!(ep);
+            } else if (widget.onSelectEpisode != null) {
+              widget.onSelectEpisode!(ep);
+            }
           },
         );
       },

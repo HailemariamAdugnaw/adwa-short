@@ -71,9 +71,11 @@ class SeriesProvider extends ChangeNotifier {
 
   Future<void> load(String id) async {
     _status = SeriesDetailStatus.loading;
-    _series = null;
+    if (_series == null || _series!.id != id) {
+      _series = null;
+      notifyListeners();
+    }
     _errorMessage = null;
-    notifyListeners();
     try {
       final json = await _api.get(
         ApiConstants.seriesDetail(id),

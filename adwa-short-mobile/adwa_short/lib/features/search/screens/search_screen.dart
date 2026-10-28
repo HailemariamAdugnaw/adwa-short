@@ -9,7 +9,6 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/tag_chip.dart';
-import '../../../models/access_check.dart';
 import '../../../models/series.dart';
 import '../providers/search_provider.dart';
 

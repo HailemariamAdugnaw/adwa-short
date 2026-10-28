@@ -55,8 +55,10 @@ CREATORS_DEFS = [
         email="selam@adwashort.com",
         display_name="Selam T.",
         default_revenue_split_pct=50.0,
-        payment_method="telebirr",
-        bank_name="CBE",
+        payment_method="cbe",
+        bank_name="Commercial Bank of Ethiopia (CBE)",
+        bank_account_number="1000345678901",
+        bank_account_name="Selam Tadesse",
     ),
     dict(
         name="Daniel Kebede",
@@ -65,7 +67,9 @@ CREATORS_DEFS = [
         display_name="Daniel K.",
         default_revenue_split_pct=60.0,
         payment_method="cbe",
-        bank_name="CBE",
+        bank_name="Commercial Bank of Ethiopia (CBE)",
+        bank_account_number="1000345678902",
+        bank_account_name="Daniel Kebede",
     ),
     dict(
         name="Hanna Girma",
@@ -73,8 +77,10 @@ CREATORS_DEFS = [
         email="hanna@adwashort.com",
         display_name="Hanna G.",
         default_revenue_split_pct=70.0,
-        payment_method="awash",
-        bank_name="Awash Bank",
+        payment_method="cbe",
+        bank_name="Commercial Bank of Ethiopia (CBE)",
+        bank_account_number="1000345678903",
+        bank_account_name="Hanna Girma",
     ),
 ]
 

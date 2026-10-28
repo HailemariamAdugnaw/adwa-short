@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../models/access_status.dart';
+import '../../../models/cbe_payment.dart';
 import '../../../models/coin_package.dart';
 import '../../../models/subscription.dart';
 import '../../../models/time_pass.dart';
@@ -19,31 +22,45 @@ class WalletProvider extends ChangeNotifier {
   WalletLoadStatus _packagesStatus = WalletLoadStatus.idle;
   WalletLoadStatus _passesStatus = WalletLoadStatus.idle;
   WalletLoadStatus _subsStatus = WalletLoadStatus.idle;
+  WalletLoadStatus _accessDashboardStatus = WalletLoadStatus.idle;
 
   Wallet? _wallet;
   List<CoinPackage> _packages = [];
   List<TimePass> _passes = [];
   List<SubscriptionPlan> _plans = [];
 
+  ActivePassStatus? _activePass;
+  ActiveSubscriptionStatus? _activeSubscription;
+  Timer? _countdownTicker;
+
   String? _walletError;
   String? _packagesError;
   String? _passesError;
   String? _subsError;
+  String? _accessDashboardError;
 
   Wallet? get wallet => _wallet;
   List<CoinPackage> get packages => _packages;
   List<TimePass> get passes => _passes;
   List<SubscriptionPlan> get plans => _plans;
 
+  ActivePassStatus? get activePass => _activePass;
+  ActiveSubscriptionStatus? get activeSubscription => _activeSubscription;
+  bool get hasActiveAccess =>
+      (_activePass?.hasActivePass == true && (_activePass?.remainingSeconds ?? 0) > 0) ||
+      (_activeSubscription?.hasActiveSubscription == true && (_activeSubscription?.remainingSeconds ?? 0) > 0);
+
   WalletLoadStatus get walletStatus => _walletStatus;
   WalletLoadStatus get packagesStatus => _packagesStatus;
   WalletLoadStatus get passesStatus => _passesStatus;
   WalletLoadStatus get subsStatus => _subsStatus;
+  WalletLoadStatus get accessDashboardStatus => _accessDashboardStatus;
 
   String? get walletError => _walletError;
   String? get packagesError => _packagesError;
   String? get passesError => _passesError;
   String? get subsError => _subsError;
+  String? get accessDashboardError => _accessDashboardError;
 
   void deductCoins(int coins) {
     if (_wallet != null) {
@@ -59,6 +76,28 @@ class WalletProvider extends ChangeNotifier {
     } else {
       _wallet = Wallet(balanceBirr: 0, balanceCoins: newBalance);
     }
+    notifyListeners();
+  }
+
+  void reset() {
+    _countdownTicker?.cancel();
+    _countdownTicker = null;
+    _wallet = null;
+    _activePass = null;
+    _activeSubscription = null;
+    _packages = [];
+    _passes = [];
+    _plans = [];
+    _walletStatus = WalletLoadStatus.idle;
+    _packagesStatus = WalletLoadStatus.idle;
+    _passesStatus = WalletLoadStatus.idle;
+    _subsStatus = WalletLoadStatus.idle;
+    _accessDashboardStatus = WalletLoadStatus.idle;
+    _walletError = null;
+    _packagesError = null;
+    _passesError = null;
+    _subsError = null;
+    _accessDashboardError = null;
     notifyListeners();
   }
 
@@ -214,6 +253,7 @@ class WalletProvider extends ChangeNotifier {
         parser: (j) => j,
       );
       await loadWallet(refresh: true);
+      await loadAccessDashboard(refresh: true);
       return true;
     } catch (e) {
       if (kDebugMode) print('purchasePass failed: $e');
@@ -229,6 +269,7 @@ class WalletProvider extends ChangeNotifier {
         parser: (j) => j,
       );
       await loadWallet(refresh: true);
+      await loadAccessDashboard(refresh: true);
       return true;
     } catch (e) {
       if (kDebugMode) print('subscribe failed: $e');
@@ -240,7 +281,7 @@ class WalletProvider extends ChangeNotifier {
     try {
       await _api.post(
         ApiConstants.walletDeposit,
-        body: {'amount': amount, 'provider': 'telebirr'},
+        body: {'amount': amount, 'provider': 'cbe'},
         parser: (j) => j,
       );
       await loadWallet(refresh: true);
@@ -249,5 +290,152 @@ class WalletProvider extends ChangeNotifier {
       if (kDebugMode) print('deposit failed: $e');
       return false;
     }
+  }
+
+  // Commercial Bank of Ethiopia (CBE / CBE Birr) Automated Checkout Flow
+  Future<CbePaymentInitiateResult?> initiateCbePayment({
+    required String itemType,
+    dynamic itemId,
+    num? amountBirr,
+    String? phone,
+  }) async {
+    try {
+      final parsedItemId = itemId is int
+          ? itemId
+          : (itemId != null ? int.tryParse(itemId.toString()) : null);
+      final res = await _api.post<CbePaymentInitiateResult>(
+        ApiConstants.cbeInitiate,
+        body: {
+          'item_type': itemType,
+          if (parsedItemId != null) 'item_id': parsedItemId,
+          if (amountBirr != null) 'amount_birr': amountBirr,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+        },
+        parser: (j) => CbePaymentInitiateResult.fromJson(j as Map<String, dynamic>),
+      );
+      return res;
+    } catch (e) {
+      if (kDebugMode) print('initiateCbePayment failed: $e');
+      return null;
+    }
+  }
+
+  Future<CbeOrderStatus?> checkCbeOrderStatus(String orderId) async {
+    try {
+      final res = await _api.get<CbeOrderStatus>(
+        ApiConstants.cbeOrderStatus(orderId),
+        parser: (j) => CbeOrderStatus.fromJson(j as Map<String, dynamic>),
+      );
+      if (res.isCompleted) {
+        await loadWallet(refresh: true);
+        await loadAccessDashboard(refresh: true);
+        if (_passes.isNotEmpty) await loadPasses();
+        if (_plans.isNotEmpty) await loadSubscriptions();
+      }
+      return res;
+    } catch (e) {
+      if (kDebugMode) print('checkCbeOrderStatus failed: $e');
+      return null;
+    }
+  }
+
+  Future<bool> simulateCbePayment(String orderId) async {
+    try {
+      await _api.post(
+        ApiConstants.cbeSimulatePayment(orderId),
+        parser: (j) => j,
+      );
+      await loadWallet(refresh: true);
+      await loadAccessDashboard(refresh: true);
+      if (_passes.isNotEmpty) await loadPasses();
+      if (_plans.isNotEmpty) await loadSubscriptions();
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('simulateCbePayment failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> loadAccessDashboard({bool refresh = false}) async {
+    _accessDashboardStatus = refresh ? WalletLoadStatus.refreshing : WalletLoadStatus.loading;
+    notifyListeners();
+    try {
+      final res = await _api.get<UserAccessDashboard>(
+        ApiConstants.userAccessDashboard,
+        parser: (j) => j is Map<String, dynamic>
+            ? UserAccessDashboard.fromJson(j)
+            : UserAccessDashboard(
+                serverTime: DateTime.now().toUtc(),
+                activePass: ActivePassStatus.empty(),
+                activeSubscription: ActiveSubscriptionStatus.empty(),
+              ),
+      );
+      _activePass = res.activePass;
+      _activeSubscription = res.activeSubscription;
+      _accessDashboardStatus = WalletLoadStatus.success;
+      _accessDashboardError = null;
+      _startCountdownTicker();
+    } on ApiException catch (e) {
+      _accessDashboardError = e.message;
+      _accessDashboardStatus = WalletLoadStatus.error;
+    } catch (e) {
+      _accessDashboardError = e.toString();
+      _accessDashboardStatus = WalletLoadStatus.error;
+    }
+    notifyListeners();
+  }
+
+  void _startCountdownTicker() {
+    _countdownTicker?.cancel();
+    final hasPassSecs = (_activePass?.remainingSeconds ?? 0) > 0;
+    final hasSubSecs = (_activeSubscription?.remainingSeconds ?? 0) > 0;
+    if (!hasPassSecs && !hasSubSecs) return;
+
+    _countdownTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      bool changed = false;
+      if (_activePass != null && _activePass!.remainingSeconds > 0) {
+        final nextSecs = _activePass!.remainingSeconds - 1;
+        _activePass = _activePass!.copyWith(
+          remainingSeconds: nextSecs,
+          hasActivePass: nextSecs > 0,
+        );
+        changed = true;
+      }
+      if (_activeSubscription != null && _activeSubscription!.remainingSeconds > 0) {
+        final nextSecs = _activeSubscription!.remainingSeconds - 1;
+        _activeSubscription = _activeSubscription!.copyWith(
+          remainingSeconds: nextSecs,
+          hasActiveSubscription: nextSecs > 0,
+        );
+        changed = true;
+      }
+      if (changed) {
+        notifyListeners();
+      } else {
+        _countdownTicker?.cancel();
+      }
+    });
+  }
+
+  Future<bool> cancelSubscription({int? subscriptionId}) async {
+    try {
+      final endpoint = subscriptionId != null
+          ? '/subscriptions/cancel/$subscriptionId'
+          : ApiConstants.subscriptionsUnsubscribe;
+      await _api.post(endpoint, parser: (j) => j);
+      await loadAccessDashboard(refresh: true);
+      await loadWallet(refresh: true);
+      if (_plans.isNotEmpty) await loadSubscriptions();
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('cancelSubscription failed: $e');
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _countdownTicker?.cancel();
+    super.dispose();
   }
 }

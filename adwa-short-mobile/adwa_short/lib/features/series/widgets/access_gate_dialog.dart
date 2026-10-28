@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/adwa_button.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../models/access_check.dart';
 import '../../../models/episode.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class AccessGateDialog extends StatefulWidget {
   const AccessGateDialog({
@@ -60,7 +63,26 @@ class _AccessGateDialogState extends State<AccessGateDialog> {
   bool _busy = false;
   int? _selected;
 
+  bool _isAuth(BuildContext context) {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      return auth.isAuthenticated;
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _runOption(int idx) async {
+    if (!_isAuth(context)) {
+      final loggedIn = await GuestAuthPrompt.show(
+        context,
+        title: 'Sign In to Unlock',
+        message:
+            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+      );
+      if (!loggedIn || !mounted) return;
+    }
+
     setState(() {
       _busy = true;
       _selected = idx;
@@ -172,7 +194,16 @@ class _AccessGateDialogState extends State<AccessGateDialog> {
                       title: 'Buy a Time Pass',
                       subtitle: 'Unlimited access for a limited time',
                       enabled: widget.onBuyPass != null,
-                      onTap: () {
+                      onTap: () async {
+                        if (!_isAuth(context)) {
+                          final loggedIn = await GuestAuthPrompt.show(
+                            context,
+                            title: 'Sign In to Buy Pass',
+                            message:
+                                'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+                          );
+                          if (!loggedIn || !mounted) return;
+                        }
                         Navigator.of(context).pop();
                         widget.onBuyPass?.call();
                       },
@@ -186,7 +217,16 @@ class _AccessGateDialogState extends State<AccessGateDialog> {
                           'Best value for binge-watchers — unlock everything',
                       enabled: widget.onSubscribe != null,
                       badge: 'BEST',
-                      onTap: () {
+                      onTap: () async {
+                        if (!_isAuth(context)) {
+                          final loggedIn = await GuestAuthPrompt.show(
+                            context,
+                            title: 'Sign In to Subscribe',
+                            message:
+                                'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+                          );
+                          if (!loggedIn || !mounted) return;
+                        }
                         Navigator.of(context).pop();
                         widget.onSubscribe?.call();
                       },

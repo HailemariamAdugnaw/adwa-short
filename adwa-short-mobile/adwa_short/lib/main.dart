@@ -68,7 +68,7 @@ Future<void> main() async {
   ));
 }
 
-class AdwaShortAppRoot extends StatelessWidget {
+class AdwaShortAppRoot extends StatefulWidget {
   const AdwaShortAppRoot({
     super.key,
     required this.apiClient,
@@ -81,55 +81,99 @@ class AdwaShortAppRoot extends StatelessWidget {
   final AuthRepository authRepository;
 
   @override
+  State<AdwaShortAppRoot> createState() => _AdwaShortAppRootState();
+}
+
+class _AdwaShortAppRootState extends State<AdwaShortAppRoot> {
+  late final AppStateProvider _appStateProvider;
+  late final AuthProvider _authProvider;
+  late final WalletProvider _walletProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _appStateProvider = AppStateProvider();
+    _authProvider = AuthProvider(widget.authRepository);
+    _walletProvider = WalletProvider(widget.apiClient);
+
+    _authProvider.onAuthStateChanged = (user, isAuthenticated) {
+      _appStateProvider.setUser(user);
+      if (isAuthenticated) {
+        _walletProvider.loadWallet(refresh: true);
+        _walletProvider.loadAccessDashboard(refresh: true);
+      } else {
+        _walletProvider.reset();
+      }
+    };
+
+    widget.apiClient.onConnectionLost = () {
+      _appStateProvider.setConnectionLost(true);
+    };
+
+    widget.apiClient.onSessionExpired = () {
+      widget.tokenManager.clearAll();
+      _authProvider.logout();
+    };
+  }
+
+  @override
+  void dispose() {
+    _authProvider.dispose();
+    _appStateProvider.dispose();
+    _walletProvider.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<ApiClient>.value(value: apiClient),
-        Provider<TokenManager>.value(value: tokenManager),
-        Provider<AuthRepository>.value(value: authRepository),
-        Provider<AdService>(create: (_) => AdService(apiClient)),
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(authRepository),
+        Provider<ApiClient>.value(value: widget.apiClient),
+        Provider<TokenManager>.value(value: widget.tokenManager),
+        Provider<AuthRepository>.value(value: widget.authRepository),
+        Provider<AdService>(create: (_) => AdService(widget.apiClient)),
+        ChangeNotifierProvider<AuthProvider>.value(
+          value: _authProvider,
         ),
-        ChangeNotifierProvider<AppStateProvider>(
-          create: (_) => AppStateProvider(),
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: _appStateProvider,
         ),
         ChangeNotifierProvider<ShelfProvider>(
-          create: (_) => ShelfProvider(apiClient),
+          create: (_) => ShelfProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<CategoryProvider>(
-          create: (_) => CategoryProvider(apiClient),
+          create: (_) => CategoryProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<ShortsProvider>(
-          create: (_) => ShortsProvider(apiClient),
+          create: (_) => ShortsProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<SeriesProvider>(
-          create: (_) => SeriesProvider(apiClient),
+          create: (_) => SeriesProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<MyListProvider>(
-          create: (_) => MyListProvider(apiClient),
+          create: (_) => MyListProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<DownloadProvider>(
           create: (_) => DownloadProvider(),
         ),
-        ChangeNotifierProvider<WalletProvider>(
-          create: (_) => WalletProvider(apiClient),
+        ChangeNotifierProvider<WalletProvider>.value(
+          value: _walletProvider,
         ),
         ChangeNotifierProvider<LoyaltyProvider>(
-          create: (_) => LoyaltyProvider(apiClient),
+          create: (_) => LoyaltyProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<DeviceProvider>(
           create: (_) =>
-              DeviceProvider(apiClient, tokenManager.deviceId),
+              DeviceProvider(widget.apiClient, widget.tokenManager.deviceId),
         ),
         ChangeNotifierProvider<SearchProvider>(
-          create: (_) => SearchProvider(apiClient),
+          create: (_) => SearchProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<RatingProvider>(
-          create: (_) => RatingProvider(apiClient),
+          create: (_) => RatingProvider(widget.apiClient),
         ),
         ChangeNotifierProvider<ReviewProvider>(
-          create: (_) => ReviewProvider(apiClient),
+          create: (_) => ReviewProvider(widget.apiClient),
         ),
       ],
       child: const AdwaShortApp(),

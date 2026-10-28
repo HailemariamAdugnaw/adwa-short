@@ -13,13 +13,15 @@ from app.models.user import User
 from app.models.wallet import Wallet, WalletTransaction
 from app.models.subscription import TimePass, TimePassPurchase
 from app.schemas.subscription import (
+    ActivePassStatus,
     TimePassCreate,
     TimePassOut,
     TimePassPurchaseOut,
     TimePassPurchaseRequest,
     TimePassUpdate,
 )
-from app.utils.time import utcnow
+from app.services.monetization import get_user_active_pass
+from app.utils.time import ensure_utc, utcnow
 
 router = APIRouter(prefix="/passes", tags=["passes"])
 
@@ -32,11 +34,56 @@ async def list_passes(db: AsyncSession = Depends(get_db)):
     return list(res.scalars().all())
 
 
+@router.get("/active", response_model=ActivePassStatus)
+async def get_active_pass_endpoint(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Returns the user's currently active Time Pass with exact server-calculated remaining seconds."""
+    now = utcnow()
+    active = await get_user_active_pass(db, user.id)
+    if active is None or ensure_utc(active.expires_at) <= now:
+        return ActivePassStatus(has_active_pass=False, server_time=now, remaining_seconds=0)
+
+    exp_utc = ensure_utc(active.expires_at)
+    remaining = max(0, int((exp_utc - now).total_seconds()))
+    p_name = active.pass_.name if active.pass_ else "Time Pass"
+    p_hours = active.pass_.duration_hours if active.pass_ else None
+    p_price = float(active.pass_.price_birr) if active.pass_ else None
+
+    return ActivePassStatus(
+        has_active_pass=True,
+        purchase_id=active.id,
+        pass_id=active.pass_id,
+        name=p_name,
+        duration_hours=p_hours,
+        price_birr=p_price,
+        starts_at=ensure_utc(active.starts_at),
+        expires_at=exp_utc,
+        is_active=True,
+        server_time=now,
+        remaining_seconds=remaining,
+    )
+
+
 @router.get("/my", response_model=List[TimePassPurchaseOut])
 async def my_passes(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    now = utcnow()
+    # Expire outdated passes for this user
+    stale_res = await db.execute(
+        select(TimePassPurchase).where(
+            TimePassPurchase.user_id == user.id,
+            TimePassPurchase.is_active.is_(True),
+            TimePassPurchase.expires_at <= now,
+        )
+    )
+    for sp in stale_res.scalars().all():
+        sp.is_active = False
+    await db.flush()
+
     res = await db.execute(
         select(TimePassPurchase).where(TimePassPurchase.user_id == user.id).order_by(TimePassPurchase.created_at.desc())
     )
@@ -77,11 +124,18 @@ async def purchase_pass(
     )
 
     now = utcnow()
+    # Time Pass Repurchase / Stacking:
+    # If the user already has an active pass, extend/stack duration onto the existing expiry.
+    active_pass = await get_user_active_pass(db, user.id)
+    base_time = ensure_utc(active_pass.expires_at) if (active_pass and ensure_utc(active_pass.expires_at) > now) else now
+    duration_hours = max(1, int(p.duration_hours))
+    new_expires_at = base_time + timedelta(hours=duration_hours)
+
     purchase = TimePassPurchase(
         user_id=user.id,
         pass_id=p.id,
         starts_at=now,
-        expires_at=now + timedelta(hours=int(p.duration_hours)),
+        expires_at=new_expires_at,
         is_active=True,
     )
     db.add(purchase)

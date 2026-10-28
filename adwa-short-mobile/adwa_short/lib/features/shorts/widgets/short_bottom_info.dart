@@ -8,6 +8,7 @@ class ShortBottomInfo extends StatefulWidget {
   const ShortBottomInfo({
     super.key,
     required this.item,
+    this.currentEpisodeNumber,
     this.totalEpisodes,
     this.onShowEpisodes,
     this.previewMode = false,
@@ -15,6 +16,7 @@ class ShortBottomInfo extends StatefulWidget {
   });
 
   final ShortItem item;
+  final int? currentEpisodeNumber;
   final int? totalEpisodes;
   final VoidCallback? onShowEpisodes;
   final bool previewMode;
@@ -31,8 +33,13 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final hasDescription = item.description.trim().isNotEmpty;
-    final currentEp = item.episodeNumber ?? 0;
-    final total = widget.totalEpisodes ?? 0;
+    final currentEp = widget.currentEpisodeNumber ??
+        (item.episodeNumber != null && item.episodeNumber! > 0
+            ? item.episodeNumber!
+            : 0);
+    final total = (widget.totalEpisodes != null && widget.totalEpisodes! > 0)
+        ? widget.totalEpisodes!
+        : (item.totalEpisodes > 0 ? item.totalEpisodes : 0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -75,7 +82,7 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
   Widget _watchFullButton() {
     return GestureDetector(
       onTap: widget.onWatchFull,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -130,7 +137,7 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
         const SizedBox(width: 6),
         GestureDetector(
           onTap: () => setState(() => _expanded = !_expanded),
-          behavior: HitTestBehavior.opaque,
+          behavior: HitTestBehavior.translucent,
           child: Padding(
             padding: const EdgeInsets.only(bottom: 2),
             child: Text(
@@ -151,6 +158,7 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
     final displayCurrent = current > 0 ? current : 1;
     final displayTotal = total > 0 ? '$total EP' : 'EP';
     return GestureDetector(
+      key: const ValueKey('episode_bar_tap'),
       onTap: widget.onShowEpisodes,
       behavior: HitTestBehavior.opaque,
       child: Container(
@@ -179,12 +187,16 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
             ),
             const SizedBox(width: 6),
             GestureDetector(
+              key: const ValueKey('episode_bar_arrow_btn'),
               onTap: widget.onShowEpisodes,
               behavior: HitTestBehavior.opaque,
-              child: const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.white,
-                size: 18,
+              child: const Padding(
+                padding: EdgeInsets.all(2.0),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.white,
+                  size: 18,
+                ),
               ),
             ),
           ],

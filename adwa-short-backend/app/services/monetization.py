@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Optional, Tuple
 
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ad_unlock import AdUnlockLog, AdUnlockRule
@@ -20,6 +21,7 @@ class AccessResult(str, Enum):
     ALLOWED_PASS = "allowed_pass"
     ALLOWED_SUBSCRIPTION = "allowed_subscription"
     ALLOWED_COINS = "allowed_coins"
+    BLOCKED_NEED_LOGIN = "need_login"
     BLOCKED_NEED_AD = "need_ad"
     BLOCKED_NEED_COINS = "need_coins"
     BLOCKED_NEED_PASS = "need_pass"
@@ -59,10 +61,25 @@ async def _has_coin_unlock(db: AsyncSession, user_id: int, episode_id: int) -> b
 
 async def _has_active_pass(db: AsyncSession, user_id: int) -> Tuple[bool, Optional[datetime]]:
     now = datetime.now(timezone.utc)
+    # Proactively mark expired passes for this user
+    stale_res = await db.execute(
+        select(TimePassPurchase).where(
+            TimePassPurchase.user_id == user_id,
+            TimePassPurchase.is_active.is_(True),
+            TimePassPurchase.expires_at <= now,
+        )
+    )
+    stale_passes = stale_res.scalars().all()
+    if stale_passes:
+        for sp in stale_passes:
+            sp.is_active = False
+        await db.flush()
+
     res = await db.execute(
         select(TimePassPurchase).where(
             TimePassPurchase.user_id == user_id,
             TimePassPurchase.is_active.is_(True),
+            TimePassPurchase.starts_at <= now,
             TimePassPurchase.expires_at > now,
         ).order_by(TimePassPurchase.expires_at.desc()).limit(1)
     )
@@ -74,10 +91,25 @@ async def _has_active_pass(db: AsyncSession, user_id: int) -> Tuple[bool, Option
 
 async def _has_active_subscription(db: AsyncSession, user_id: int) -> Tuple[bool, Optional[datetime]]:
     now = datetime.now(timezone.utc)
+    # Proactively mark expired subscriptions for this user
+    stale_res = await db.execute(
+        select(Subscription).where(
+            Subscription.user_id == user_id,
+            Subscription.status == "active",
+            Subscription.next_billing_at <= now,
+        )
+    )
+    stale_subs = stale_res.scalars().all()
+    if stale_subs:
+        for ss in stale_subs:
+            ss.status = "expired"
+        await db.flush()
+
     res = await db.execute(
         select(Subscription).where(
             Subscription.user_id == user_id,
             Subscription.status == "active",
+            Subscription.started_at <= now,
             Subscription.next_billing_at > now,
         ).order_by(Subscription.next_billing_at.desc()).limit(1)
     )
@@ -85,6 +117,68 @@ async def _has_active_subscription(db: AsyncSession, user_id: int) -> Tuple[bool
     if s is None:
         return False, None
     return True, s.next_billing_at
+
+
+async def get_user_active_pass(db: AsyncSession, user_id: int) -> Optional[TimePassPurchase]:
+    """Retrieves the currently active TimePassPurchase validated against server UTC time."""
+    now = datetime.now(timezone.utc)
+    stale_res = await db.execute(
+        select(TimePassPurchase).where(
+            TimePassPurchase.user_id == user_id,
+            TimePassPurchase.is_active.is_(True),
+            TimePassPurchase.expires_at <= now,
+        )
+    )
+    stale_passes = stale_res.scalars().all()
+    if stale_passes:
+        for sp in stale_passes:
+            sp.is_active = False
+        await db.flush()
+
+    res = await db.execute(
+        select(TimePassPurchase)
+        .options(joinedload(TimePassPurchase.pass_))
+        .where(
+            TimePassPurchase.user_id == user_id,
+            TimePassPurchase.is_active.is_(True),
+            TimePassPurchase.starts_at <= now,
+            TimePassPurchase.expires_at > now,
+        )
+        .order_by(TimePassPurchase.expires_at.desc())
+        .limit(1)
+    )
+    return res.scalar_one_or_none()
+
+
+async def get_user_active_subscription(db: AsyncSession, user_id: int) -> Optional[Subscription]:
+    """Retrieves the currently active Subscription validated against server UTC time."""
+    now = datetime.now(timezone.utc)
+    stale_res = await db.execute(
+        select(Subscription).where(
+            Subscription.user_id == user_id,
+            Subscription.status == "active",
+            Subscription.next_billing_at <= now,
+        )
+    )
+    stale_subs = stale_res.scalars().all()
+    if stale_subs:
+        for ss in stale_subs:
+            ss.status = "expired"
+        await db.flush()
+
+    res = await db.execute(
+        select(Subscription)
+        .options(joinedload(Subscription.plan))
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.status == "active",
+            Subscription.started_at <= now,
+            Subscription.next_billing_at > now,
+        )
+        .order_by(Subscription.next_billing_at.desc())
+        .limit(1)
+    )
+    return res.scalar_one_or_none()
 
 
 async def _get_ad_rule(db: AsyncSession) -> Optional[AdUnlockRule]:
@@ -171,7 +265,7 @@ async def resolve_access(
         return AccessResult.FREE
 
     if user is None:
-        raise AccessDenied(AccessResult.BLOCKED_NEED_SUBSCRIPTION, episode.id)
+        raise AccessDenied(AccessResult.BLOCKED_NEED_LOGIN, episode.id)
 
     if await _has_ad_unlock(db, user.id, episode.id):
         return AccessResult.ALLOWED_AD

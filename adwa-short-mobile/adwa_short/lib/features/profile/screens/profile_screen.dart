@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/user.dart';
+import '../../../providers/app_state_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../downloads/providers/download_provider.dart';
 import '../providers/wallet_provider.dart';
@@ -45,18 +48,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthProvider>().refreshUser();
-      context.read<WalletProvider>().loadWallet(refresh: false);
-      context.read<DownloadProvider>().loadDownloads();
+      final auth = context.read<AuthProvider>();
+      if (auth.isAuthenticated) {
+        auth.refreshUser();
+        context.read<WalletProvider>().loadWallet(refresh: false);
+        context.read<WalletProvider>().loadAccessDashboard(refresh: false);
+        context.read<DownloadProvider>().loadDownloads();
+      }
     });
   }
 
   Future<void> _onRefresh() async {
-    await Future.wait([
-      context.read<AuthProvider>().refreshUser(),
-      context.read<WalletProvider>().loadWallet(refresh: true),
-      context.read<DownloadProvider>().loadDownloads(),
-    ]);
+    final auth = context.read<AuthProvider>();
+    if (auth.isAuthenticated) {
+      await Future.wait([
+        auth.refreshUser(),
+        context.read<WalletProvider>().loadWallet(refresh: true),
+        context.read<WalletProvider>().loadAccessDashboard(refresh: true),
+        context.read<DownloadProvider>().loadDownloads(),
+      ]);
+    }
+  }
+
+  Future<void> _promptAuth({String? title, String? message}) async {
+    final ok = await GuestAuthPrompt.show(
+      context,
+      title: title,
+      message: message,
+    );
+    if (ok && mounted) {
+      await _onRefresh();
+    }
+  }
+
+  Future<void> _guardAuth(
+      VoidCallback? action, String title, String message) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      final ok = await GuestAuthPrompt.show(
+        context,
+        title: title,
+        message: message,
+      );
+      if (!ok || !mounted) return;
+      await _onRefresh();
+    }
+    action?.call();
   }
 
   @override
@@ -103,108 +140,519 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onRefresh: _onRefresh,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: [
-              _userHeaderCard(user),
-              const SizedBox(height: 14),
-              _balanceAndTopUpCard(w?.balanceBirr ?? 745, w?.balanceCoins ?? 1200),
-              const SizedBox(height: 12),
-              _sectionHeader('WALLET'),
-              _groupedCard(
-                children: [
-                  _menuTile(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'My Wallet',
-                    subtitle: 'Balance, deposit & transactions',
-                    onTap: widget.onOpenWallet,
-                  ),
-                  const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
-                  _menuTile(
-                    icon: Icons.access_time_filled_rounded,
-                    title: 'Buy Time Pass',
-                    subtitle: 'Unlimited access for a limited time',
-                    onTap: widget.onBuyPass,
-                  ),
-                  const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
-                  _menuTile(
-                    icon: Icons.workspace_premium_outlined,
-                    title: 'Subscriptions',
-                    subtitle: 'Best value for binge-watchers',
-                    onTap: widget.onSubscribe,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _sectionHeader('ACCOUNT'),
-              _groupedCard(
-                children: [
-                  _menuTile(
-                    icon: Icons.card_giftcard_outlined,
-                    title: 'Loyalty Rewards',
-                    subtitle: 'Free episodes, coins & passes',
-                    onTap: widget.onOpenLoyalty,
-                  ),
-                  const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
-                  _downloadsTile(),
-                  const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
-                  _menuTile(
-                    icon: Icons.devices_other_rounded,
-                    title: 'My Devices',
-                    subtitle: 'Manage active sessions',
-                    onTap: widget.onOpenDevices,
-                  ),
-                  const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
-                  _menuTile(
-                    icon: Icons.settings_outlined,
-                    title: 'Settings',
-                    subtitle: 'Language, quality & cache',
-                    onTap: widget.onOpenSettings,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _groupedCard(
-                children: [
-                  _menuTile(
-                    icon: Icons.logout_rounded,
-                    title: 'Log Out',
-                    subtitle: '',
-                    isDanger: true,
-                    onTap: _confirmLogout,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 28),
-              Center(
-                child: Text(
-                  'ADWA SHORT v1.0.0',
-                  style: AppTextStyles.caption.copyWith(
-                    color: const Color(0xFF666666),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+            children: auth.isAuthenticated
+                ? [
+                    _userHeaderCard(user),
+                    const SizedBox(height: 14),
+                    _balanceAndTopUpCard(
+                      w?.balanceBirr ?? 0,
+                      w?.balanceCoins ?? 0,
+                    ),
+                    const SizedBox(height: 14),
+                    _activeAccessDashboardCard(wallet),
+                    const SizedBox(height: 12),
+                    _sectionHeader('WALLET'),
+                    _groupedCard(
+                      children: [
+                        _menuTile(
+                          icon: Icons.account_balance_wallet_outlined,
+                          title: 'My Wallet',
+                          subtitle: 'CBE balance, deposit & transactions',
+                          onTap: widget.onOpenWallet,
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.access_time_filled_rounded,
+                          title: 'Buy Time Pass',
+                          subtitle: 'Unlimited access for a limited time',
+                          onTap: widget.onBuyPass,
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.workspace_premium_outlined,
+                          title: 'Subscriptions',
+                          subtitle: 'Best value for binge-watchers',
+                          onTap: widget.onSubscribe,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _sectionHeader('ACCOUNT'),
+                    _groupedCard(
+                      children: [
+                        _menuTile(
+                          icon: Icons.card_giftcard_outlined,
+                          title: 'Loyalty Rewards',
+                          subtitle: 'Free episodes, coins & passes',
+                          onTap: widget.onOpenLoyalty,
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _downloadsTile(),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.devices_other_rounded,
+                          title: 'My Devices',
+                          subtitle: 'Manage active sessions',
+                          onTap: widget.onOpenDevices,
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.settings_outlined,
+                          title: 'Settings',
+                          subtitle: 'Language, quality & cache',
+                          onTap: widget.onOpenSettings,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _groupedCard(
+                      children: [
+                        _menuTile(
+                          icon: Icons.logout_rounded,
+                          title: 'Log Out',
+                          subtitle: '',
+                          isDanger: true,
+                          onTap: _confirmLogout,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    _buildVersionFooter(),
+                  ]
+                : [
+                    _guestHeaderCard(),
+                    const SizedBox(height: 14),
+                    _guestCtaBanner(),
+                    const SizedBox(height: 16),
+                    _sectionHeader('APP SETTINGS & OFFLINE'),
+                    _groupedCard(
+                      children: [
+                        _downloadsTile(),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.settings_outlined,
+                          title: 'Settings',
+                          subtitle: 'Language, streaming quality & cache',
+                          onTap: widget.onOpenSettings,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _sectionHeader('PREMIUM & WALLET'),
+                    _groupedCard(
+                      children: [
+                        _menuTile(
+                          icon: Icons.account_balance_wallet_outlined,
+                          title: 'My Wallet',
+                          subtitle: 'CBE balance, deposit & transactions',
+                          onTap: () => _guardAuth(
+                            widget.onOpenWallet,
+                            'Sign In to Access Wallet',
+                            'Please sign in or register to manage your CBE Birr wallet and add funds.',
+                          ),
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.access_time_filled_rounded,
+                          title: 'Buy Time Pass',
+                          subtitle: 'Unlimited access for a limited time',
+                          onTap: () => _guardAuth(
+                            widget.onBuyPass,
+                            'Sign In to Buy Pass',
+                            'Please sign in or register to buy time passes and enjoy unlimited access.',
+                          ),
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.workspace_premium_outlined,
+                          title: 'Subscriptions',
+                          subtitle: 'Best value for binge-watchers',
+                          onTap: () => _guardAuth(
+                            widget.onSubscribe,
+                            'Sign In to Subscribe',
+                            'Please sign in or register to activate a subscription and enjoy unlimited access.',
+                          ),
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.card_giftcard_outlined,
+                          title: 'Loyalty Rewards',
+                          subtitle: 'Free episodes, coins & passes',
+                          onTap: () => _guardAuth(
+                            widget.onOpenLoyalty,
+                            'Sign In for Loyalty Rewards',
+                            'Please sign in or register to view and claim your loyalty rewards.',
+                          ),
+                        ),
+                        const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+                        _menuTile(
+                          icon: Icons.devices_other_rounded,
+                          title: 'My Devices',
+                          subtitle: 'Manage active sessions',
+                          onTap: () => _guardAuth(
+                            widget.onOpenDevices,
+                            'Sign In to Manage Devices',
+                            'Please sign in or register to manage your active device sessions.',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _groupedCard(
+                      children: [
+                        _menuTile(
+                          icon: Icons.login_rounded,
+                          title: 'Sign In / Register',
+                          subtitle: 'Access your saved progress & subscriptions',
+                          onTap: () => _promptAuth(
+                            title: 'Sign In to Your Account',
+                            message:
+                                'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    _buildVersionFooter(),
+                  ],
           ),
         ),
       ),
     );
   }
 
+  Widget _buildVersionFooter() {
+    return Center(
+      child: Text(
+        'ADWA SHORT v1.0.0',
+        style: AppTextStyles.caption.copyWith(
+          color: const Color(0xFF666666),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _guestHeaderCard() {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F080A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.bloodRed.withValues(alpha: 0.7),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.bloodRed.withValues(alpha: 0.2),
+            blurRadius: 16,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -25,
+            left: -25,
+            child: Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.bloodRed.withValues(alpha: 0.35),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF181014),
+                    border: Border.all(color: AppColors.bloodRed, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.bloodRed.withValues(alpha: 0.4),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.person_outline_rounded,
+                    color: AppColors.white,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Guest Account',
+                        style: AppTextStyles.h2.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 19,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF240D13),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color:
+                                    AppColors.bloodRed.withValues(alpha: 0.6),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: const Text(
+                              'Guest Mode • #GUEST',
+                              style: TextStyle(
+                                color: AppColors.bloodRedBright,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Browsing locally without an account',
+                        style: AppTextStyles.caption.copyWith(
+                          color: const Color(0xFF8E8E93),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guestCtaBanner() {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF14080B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.bloodRed,
+          width: 1.4,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x44C8102E),
+            blurRadius: 18,
+            spreadRadius: 1,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -20,
+            right: -20,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Color(0x55C8102E),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.bloodRed,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.stars_rounded,
+                        color: AppColors.white,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Unlock Full Access',
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Sign in or register to sync your wallet, track time passes, and unlock premium episodes',
+                  style: TextStyle(
+                    color: Color(0xFFEEEEEE),
+                    fontSize: 13.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    // Sign In button
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.of(context)
+                              .pushNamed(AppRoutes.login)
+                              .then((_) {
+                            if (mounted) _onRefresh();
+                          });
+                        },
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFFFF1A2B),
+                                AppColors.bloodRed,
+                                AppColors.bloodRedDark,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(21),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x66E50914),
+                                blurRadius: 10,
+                                offset: Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.login_rounded,
+                                  color: AppColors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Sign In',
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Register button
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.of(context)
+                              .pushNamed(AppRoutes.register)
+                              .then((_) {
+                            if (mounted) _onRefresh();
+                          });
+                        },
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E0C12),
+                            borderRadius: BorderRadius.circular(21),
+                            border: Border.all(
+                              color: AppColors.bloodRed,
+                              width: 1.2,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.person_add_alt_1_rounded,
+                                  color: AppColors.bloodRedBright, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Register',
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _userHeaderCard(User? user) {
-    final name = (user?.displayName.trim().isNotEmpty == true)
-        ? user!.displayName
-        : 'Haile';
-    final phone = (user?.phone.trim().isNotEmpty == true)
-        ? user!.phone
-        : '1234567890';
-    final userId = (user?.id.trim().isNotEmpty == true)
-        ? user!.id
-        : '3';
-    final avatarUrl = user?.avatarUrl;
+    if (user == null) {
+      return _guestHeaderCard();
+    }
+
+    final name = (user.displayName.trim().isNotEmpty == true)
+        ? user.displayName
+        : 'User';
+    final phone = (user.phone.trim().isNotEmpty == true)
+        ? user.phone
+        : '';
+    final userId = (user.id.trim().isNotEmpty == true)
+        ? user.id
+        : '';
+    final avatarUrl = user.avatarUrl;
     final resolvedAvatar = ApiClient.resolveMediaUrl(avatarUrl);
 
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'H';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -516,7 +964,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             // Bottom Pill Button: Coin Top-Up >
             GestureDetector(
-              onTap: widget.onOpenCoinStore,
+              onTap: () => _guardAuth(
+                widget.onOpenCoinStore,
+                'Sign In to Buy Coins',
+                'Please sign in or register to buy coins, unlock episodes, and access subscriptions.',
+              ),
               behavior: HitTestBehavior.opaque,
               child: Container(
                 width: double.infinity,
@@ -576,6 +1028,482 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _activeAccessDashboardCard(WalletProvider wallet) {
+    final sub = wallet.activeSubscription;
+    final pass = wallet.activePass;
+    final bool hasSub = sub != null && sub.hasActiveSubscription && sub.remainingSeconds > 0;
+    final bool hasPass = pass != null && pass.hasActivePass && pass.remainingSeconds > 0;
+
+    if (!hasSub && !hasPass) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F080A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.12),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.hourglass_empty_rounded,
+                color: Color(0xFF8E8E93),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No Active Pass or Subscription',
+                    style: AppTextStyles.body1.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Unlock unlimited streaming anytime',
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFF8E8E93),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _guardAuth(
+                widget.onSubscribe ?? widget.onBuyPass,
+                'Sign In to Access Plans',
+                'Please sign in or register to activate passes and subscriptions.',
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.bloodRed,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Explore',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F080A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.bloodRed,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.bloodRed.withValues(alpha: 0.25),
+            blurRadius: 16,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Corner radial glow
+          Positioned(
+            top: -30,
+            right: -30,
+            child: Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.bloodRed.withValues(alpha: 0.35),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.bloodRed.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.bloodRed, width: 1.2),
+                      ),
+                      child: const Icon(
+                        Icons.verified_rounded,
+                        color: AppColors.bloodRed,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'ACTIVE ACCESS STATUS',
+                      style: AppTextStyles.overline.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00C853).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00C853), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF00C853),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          const Text(
+                            'UNLOCKED',
+                            style: TextStyle(
+                              color: Color(0xFF00C853),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 10,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                // Active Subscription Block
+                if (hasSub) ...[
+                  _accessSubscriptionRow(
+                    title: sub.planName ?? 'VIP Subscription',
+                    subtitle: 'Tier: ${sub.billingCycle?.toUpperCase() ?? "MONTHLY"}',
+                    renewsAtText: sub.formattedExpiresAt,
+                    onManage: widget.onSubscribe,
+                  ),
+                ],
+
+                // Divider if both active
+                if (hasSub && hasPass)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Divider(color: Colors.white12, height: 1),
+                  ),
+
+                // Active Time Pass Block
+                if (hasPass) ...[
+                  _accessItemRow(
+                    icon: Icons.access_time_filled_rounded,
+                    title: pass.name ?? 'Time Pass',
+                    subtitle: 'Duration: ${pass.durationHours ?? 24} Hours',
+                    remainingText: pass.formattedRemaining,
+                    expiresAtText: pass.formattedExpiresAt,
+                    onManage: widget.onBuyPass,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _accessSubscriptionRow({
+    required String title,
+    required String subtitle,
+    required String renewsAtText,
+    VoidCallback? onManage,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFB800), size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.h3.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFF8E8E93),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onManage != null)
+              GestureDetector(
+                onTap: onManage,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                  child: Text(
+                    'Manage',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        // Auto-Renewing Status Card (No countdown timer for auto-renewing subscriptions)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.black,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.autorenew_rounded,
+                    color: AppColors.bloodRed,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Billing Status:',
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFF8E8E93),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.bloodRed.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppColors.bloodRed, width: 1),
+                ),
+                child: const Text(
+                  'AUTO-RENEWS',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        if (renewsAtText.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              'Next billing date: $renewsAtText',
+              style: AppTextStyles.caption.copyWith(
+                color: const Color(0xFF8E8E93),
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _accessItemRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String remainingText,
+    required String expiresAtText,
+    VoidCallback? onManage,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: const Color(0xFFFFB800), size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.h3.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFF8E8E93),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onManage != null)
+              GestureDetector(
+                onTap: onManage,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                  child: Text(
+                    'Manage',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        // Live Countdown Display Card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.black,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.timer_outlined,
+                    color: AppColors.bloodRed,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Remaining:',
+                    style: AppTextStyles.caption.copyWith(
+                      color: const Color(0xFF8E8E93),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                remainingText,
+                style: AppTextStyles.body2.copyWith(
+                  color: const Color(0xFFE50914),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        if (expiresAtText.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              'Expires: $expiresAtText',
+              style: AppTextStyles.caption.copyWith(
+                color: const Color(0xFF666666),
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -782,6 +1710,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirmed != true || !mounted) return;
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+    context.read<AppStateProvider>().setUser(null);
+    context.read<WalletProvider>().reset();
+    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.welcome, (_) => false);
   }
 }

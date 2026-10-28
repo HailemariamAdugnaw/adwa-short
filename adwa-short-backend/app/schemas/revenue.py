@@ -110,6 +110,9 @@ class RevenueTransactionOut(BaseModel):
 class PayoutCreate(BaseModel):
     amount_birr: float = Field(gt=0)
     notes: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    bank_name: Optional[str] = None
 
 
 class PayoutOut(BaseModel):
@@ -122,6 +125,12 @@ class PayoutOut(BaseModel):
     processed_by_admin_id: Optional[int] = None
     notes: Optional[str] = None
     reference: Optional[str] = None
+    cbe_transaction_id: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    bank_name: Optional[str] = "Commercial Bank of Ethiopia (CBE)"
+    cbe_payout_status: Optional[str] = None
+    treasury_account_number: Optional[str] = None
     created_at: datetime
 
 
@@ -163,6 +172,26 @@ class RevenueOverview(BaseModel):
     total_paid_out_birr: float
     total_pending_balance_birr: float
     transaction_count: int
+    treasury_account_number: Optional[str] = None
+    treasury_account_name: Optional[str] = None
+    treasury_bank_name: Optional[str] = None
+    treasury_balance_birr: Optional[float] = None
+
+
+class PlatformTreasuryOut(BaseModel):
+    treasury_account_number: str
+    treasury_account_name: str
+    treasury_bank_name: str
+    treasury_branch: str
+    total_platform_revenue_birr: float
+    total_creator_earnings_birr: float
+    total_creator_disbursed_birr: float
+    total_creator_payable_birr: float
+    treasury_retained_balance_birr: float
+    subscriptions_retained_birr: float
+    unconsumed_passes_retained_birr: float
+    ad_revenues_retained_birr: float
+    content_split_fees_retained_birr: float
 
 
 class RevenueByCreatorRow(BaseModel):

@@ -7,9 +7,11 @@ import '../../../core/services/ad_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../core/widgets/star_rating.dart';
 import '../../../core/widgets/tag_chip.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/profile/providers/wallet_provider.dart';
 import '../../../features/ratings/providers/rating_provider.dart';
 import '../../../features/reviews/providers/review_provider.dart';
@@ -232,6 +234,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     _maybeLoadRatings(firstEp);
 
     return CustomScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       slivers: [
         SliverToBoxAdapter(child: _banner(series, provider, avg, ratingCount)),
         SliverToBoxAdapter(child: _info(series)),
@@ -347,6 +352,16 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 icon: const Icon(Icons.bookmark_add_outlined,
                     color: AppColors.white),
                 onPressed: () async {
+                  final auth = context.read<AuthProvider>();
+                  if (!auth.isAuthenticated) {
+                    final loggedIn = await GuestAuthPrompt.show(
+                      context,
+                      title: 'Sign In to Save',
+                      message:
+                          'Please sign in or register to save series to your list.',
+                    );
+                    if (!loggedIn || !mounted) return;
+                  }
                   if (series.episodes.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/series.dart';
@@ -78,6 +79,7 @@ class _ShelfBannerState extends State<ShelfBanner> {
         children: [
           PageView.builder(
             controller: _controller,
+            dragStartBehavior: DragStartBehavior.down,
             itemCount: widget.items.length,
             onPageChanged: (i) {
               setState(() => _index = i);
@@ -191,7 +193,7 @@ class _BannerCard extends StatelessWidget {
     );
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: immersive
           ? card
           : ClipRRect(

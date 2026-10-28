@@ -17,6 +17,7 @@ from app.services.monetization import (
     resolve_access,
 )
 from app.services.audit import log_activity
+from app.utils.time import utcnow
 
 router = APIRouter(prefix="/episodes", tags=["episodes"])
 
@@ -126,6 +127,7 @@ async def check_access(
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
+    now = utcnow()
     res = await db.execute(select(Episode).where(Episode.id == episode_id))
     ep = res.scalar_one_or_none()
     if ep is None:
@@ -137,8 +139,18 @@ async def check_access(
     try:
         result = await resolve_access(db, user, ep, series, deduct_coins=False)
     except AccessDenied as e:
-        return {"access": "denied", "reason": e.reason.value, "episode_id": episode_id}
-    return {"access": "allowed", "method": result.value, "episode_id": episode_id}
+        return {
+            "access": "denied",
+            "reason": e.reason.value,
+            "episode_id": episode_id,
+            "server_time": now.isoformat(),
+        }
+    return {
+        "access": "allowed",
+        "method": result.value,
+        "episode_id": episode_id,
+        "server_time": now.isoformat(),
+    }
 
 
 @router.post("", response_model=EpisodeOut, status_code=status.HTTP_201_CREATED)

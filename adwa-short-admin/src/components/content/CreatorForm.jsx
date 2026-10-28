@@ -11,10 +11,11 @@ import { upload, post, put, errMsg } from '../../lib/api'
 import { useAuthStore } from '../../lib/store'
 
 const PAYMENT_METHODS = [
-  { value: 'bank', label: 'Bank Transfer' },
-  { value: 'telebirr', label: 'Telebirr' },
-  { value: 'cash', label: 'Cash' },
+  { value: 'cbe', label: 'Commercial Bank of Ethiopia (CBE)' },
+  { value: 'cbe_birr', label: 'CBE Birr (Mobile)' },
+  { value: 'bank', label: 'Other Bank Transfer' },
   { value: 'cheque', label: 'Cheque' },
+  { value: 'cash', label: 'Cash' },
   { value: 'other', label: 'Other' },
 ]
 

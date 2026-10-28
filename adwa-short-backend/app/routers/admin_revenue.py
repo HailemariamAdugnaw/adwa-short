@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.deps import get_current_super_admin
 from app.models.content import Episode, Series
 from app.models.revenue import Creator, Payout, RevenueTransaction
 from app.models.user import User
 from app.schemas.revenue import (
+    PlatformTreasuryOut,
     ProcessExpiredResult,
     RevenueByContentRow,
     RevenueByCreatorRow,
@@ -20,7 +23,9 @@ from app.schemas.revenue import (
     RevenueOverview,
     RevenueTransactionOut,
 )
+from app.services.cbe_gateway import cbe_gateway
 from app.services.revenue import check_expired_passes
+from app.utils.time import utcnow
 
 router = APIRouter(prefix="/admin/revenue", tags=["admin-revenue"])
 
@@ -82,6 +87,10 @@ async def revenue_overview(
         total_paid_out_birr=paid_out,
         total_pending_balance_birr=total_pending,
         transaction_count=total_count,
+        treasury_account_number=settings.CBE_TREASURY_ACCOUNT_NUMBER,
+        treasury_account_name=settings.CBE_TREASURY_ACCOUNT_NAME,
+        treasury_bank_name=settings.CBE_TREASURY_BANK_NAME,
+        treasury_balance_birr=round(platform_share, 2),
     )
 
 
@@ -299,6 +308,76 @@ async def process_expired(
     return ProcessExpiredResult(**result)
 
 
+@router.get("/treasury", response_model=PlatformTreasuryOut)
+async def platform_treasury_status(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    """Returns official Commercial Bank of Ethiopia (CBE) Platform Treasury balance and institutional ledger."""
+    # 1. Total Platform & Creator Shares
+    gross_res = await db.execute(select(func.coalesce(func.sum(RevenueTransaction.gross_amount_birr), 0)))
+    gross = float(gross_res.scalar_one() or 0)
+
+    creator_res = await db.execute(select(func.coalesce(func.sum(RevenueTransaction.creator_share_birr), 0)))
+    creator_share = float(creator_res.scalar_one() or 0)
+    platform_share = gross - creator_share
+
+    # 2. Payouts disbursed vs pending
+    paid_res = await db.execute(
+        select(func.coalesce(func.sum(Payout.amount_birr), 0)).where(
+            Payout.status.in_(("processed", "completed"))
+        )
+    )
+    paid_out = float(paid_res.scalar_one() or 0)
+
+    # 3. Breakdown of platform-owned retained revenues
+    sub_res = await db.execute(
+        select(func.coalesce(func.sum(RevenueTransaction.platform_share_birr), 0)).where(
+            RevenueTransaction.source_type.in_(("subscription_consumption", "unconsumed_subscription", "cbe_subscription"))
+        )
+    )
+    sub_retained = float(sub_res.scalar_one() or 0)
+
+    unconsumed_res = await db.execute(
+        select(func.coalesce(func.sum(RevenueTransaction.platform_share_birr), 0)).where(
+            RevenueTransaction.source_type.in_(("unconsumed_pass", "unconsumed_subscription"))
+        )
+    )
+    unconsumed_retained = float(unconsumed_res.scalar_one() or 0)
+
+    ad_res = await db.execute(
+        select(func.coalesce(func.sum(RevenueTransaction.platform_share_birr), 0)).where(
+            RevenueTransaction.source_type == "ad_revenue"
+        )
+    )
+    ad_retained = float(ad_res.scalar_one() or 0)
+
+    split_res = await db.execute(
+        select(func.coalesce(func.sum(RevenueTransaction.platform_share_birr), 0)).where(
+            RevenueTransaction.source_type.in_(("coin_payment", "pass_consumption", "subscription_consumption"))
+        )
+    )
+    split_retained = float(split_res.scalar_one() or 0)
+
+    pending_balance = max(creator_share - paid_out, 0.0)
+
+    return PlatformTreasuryOut(
+        treasury_account_number=settings.CBE_TREASURY_ACCOUNT_NUMBER,
+        treasury_account_name=settings.CBE_TREASURY_ACCOUNT_NAME,
+        treasury_bank_name=settings.CBE_TREASURY_BANK_NAME,
+        treasury_branch=settings.CBE_TREASURY_BRANCH,
+        total_platform_revenue_birr=round(platform_share, 2),
+        total_creator_earnings_birr=round(creator_share, 2),
+        total_creator_disbursed_birr=round(paid_out, 2),
+        total_creator_payable_birr=round(pending_balance, 2),
+        treasury_retained_balance_birr=round(platform_share, 2),
+        subscriptions_retained_birr=round(sub_retained, 2),
+        unconsumed_passes_retained_birr=round(unconsumed_retained, 2),
+        ad_revenues_retained_birr=round(ad_retained, 2),
+        content_split_fees_retained_birr=round(split_retained, 2),
+    )
+
+
 @router.get("/payouts", response_model=List[dict])
 async def list_all_payouts(
     creator_id: Optional[int] = None,
@@ -328,7 +407,67 @@ async def list_all_payouts(
             "processed_at": p.processed_at.isoformat() if p.processed_at else None,
             "processed_by_admin_id": p.processed_by_admin_id,
             "reference": p.reference,
+            "cbe_transaction_id": p.cbe_transaction_id,
+            "bank_account_number": p.bank_account_number,
+            "bank_account_name": p.bank_account_name,
+            "bank_name": p.bank_name,
+            "cbe_payout_status": p.cbe_payout_status,
+            "treasury_account_number": p.treasury_account_number or settings.CBE_TREASURY_ACCOUNT_NUMBER,
             "notes": p.notes,
             "created_at": p.created_at.isoformat() if p.created_at else None,
         })
     return out
+
+
+@router.post("/payouts/{payout_id}/disburse")
+async def disburse_pending_payout(
+    payout_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_super_admin),
+):
+    """Super Admin manual trigger or retry to disburse a payout via Commercial Bank of Ethiopia (CBE) B2C."""
+    p_res = await db.execute(select(Payout).where(Payout.id == payout_id))
+    payout = p_res.scalar_one_or_none()
+    if not payout:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payout not found")
+
+    c_res = await db.execute(select(Creator).where(Creator.id == payout.creator_id))
+    creator = c_res.scalar_one_or_none()
+
+    acc_num = payout.bank_account_number or (creator.bank_account_number if creator else None)
+    acc_name = payout.bank_account_name or (creator.bank_account_name if creator else (creator.name if creator else "Creator"))
+    b_name = payout.bank_name or (creator.bank_name if creator and creator.bank_name else settings.CBE_TREASURY_BANK_NAME)
+
+    if not acc_num:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Creator has no registered Commercial Bank of Ethiopia (CBE) account number",
+        )
+
+    disburse_res = await cbe_gateway.disburse_creator_payout(
+        payout_id=payout.id,
+        creator_id=payout.creator_id,
+        amount_birr=float(payout.amount_birr),
+        bank_account_number=acc_num,
+        bank_account_name=acc_name,
+        bank_name=b_name,
+    )
+    payout.cbe_transaction_id = disburse_res.get("cbe_transaction_id")
+    payout.status = "processed" if disburse_res.get("status") == "completed" else disburse_res.get("status", "pending")
+    payout.cbe_payout_status = disburse_res.get("status", "completed")
+    payout.reference = f"cbe:b2c:{payout.cbe_transaction_id}"
+    payout.bank_account_number = acc_num
+    payout.bank_account_name = acc_name
+    payout.bank_name = b_name
+    payout.treasury_account_number = settings.CBE_TREASURY_ACCOUNT_NUMBER
+    payout.processed_at = utcnow()
+    payout.processed_by_admin_id = admin.id
+    payout.cbe_response_payload = json.dumps(disburse_res)
+    await db.commit()
+    await db.refresh(payout)
+    return {
+        "status": "success",
+        "message": f"Successfully disbursed ETB {payout.amount_birr} to CBE account {acc_num}",
+        "payout_id": payout.id,
+        "cbe_transaction_id": payout.cbe_transaction_id,
+    }

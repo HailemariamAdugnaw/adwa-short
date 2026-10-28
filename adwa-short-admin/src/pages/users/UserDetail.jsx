@@ -75,10 +75,10 @@ export function UserDetail() {
 
   const depositMutation = useMutation({
     mutationFn: async () =>
-      post('/admin/wallet/manual-deposit', {
+      post('/admin/wallet/top-up', {
         user_id: id,
-        amount_birr: Number(amount),
-        coins_credited: coins ? Number(coins) : undefined,
+        amount_birr: Number(amount) || 0,
+        coins_credited: coins ? Number(coins) : 0,
         notes,
       }),
     onSuccess: () => {
@@ -358,7 +358,7 @@ export function UserDetail() {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="e.g. 100"
-            hint="Cash received from the user"
+            hint="Credits exact fiat balance without automatically generating 1-to-1 matching coins"
             required
           />
           <Input
@@ -367,8 +367,8 @@ export function UserDetail() {
             min={0}
             value={coins}
             onChange={(e) => setCoins(e.target.value)}
-            placeholder="Leave empty to skip"
-            hint="Override the auto-calculated coin amount if needed"
+            placeholder="Leave empty for cash-only top-up"
+            hint="Optional: Credit promotional or granted coins (independent of cash balance)"
           />
           <Textarea
             label="Notes"

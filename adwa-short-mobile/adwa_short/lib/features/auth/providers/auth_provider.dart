@@ -11,6 +11,8 @@ class AuthProvider extends ChangeNotifier {
 
   final AuthRepository _repository;
 
+  void Function(User? user, bool isAuthenticated)? onAuthStateChanged;
+
   AuthStatus _status = AuthStatus.initial;
   User? _user;
   String? _errorMessage;
@@ -34,6 +36,7 @@ class AuthProvider extends ChangeNotifier {
       _status = AuthStatus.unauthenticated;
     }
     notifyListeners();
+    onAuthStateChanged?.call(_user, isAuthenticated);
   }
 
   Future<bool> login({
@@ -47,6 +50,7 @@ class AuthProvider extends ChangeNotifier {
       _user = await _repository.login(phone: phone, password: password);
       _status = AuthStatus.authenticated;
       notifyListeners();
+      onAuthStateChanged?.call(_user, true);
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -77,6 +81,7 @@ class AuthProvider extends ChangeNotifier {
       );
       _status = AuthStatus.authenticated;
       notifyListeners();
+      onAuthStateChanged?.call(_user, true);
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -96,12 +101,14 @@ class AuthProvider extends ChangeNotifier {
     _user = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
+    onAuthStateChanged?.call(null, false);
   }
 
   Future<void> refreshUser() async {
     try {
       _user = await _repository.fetchMe();
       notifyListeners();
+      onAuthStateChanged?.call(_user, isAuthenticated);
     } catch (e) {
       if (kDebugMode) print('refreshUser failed: $e');
     }

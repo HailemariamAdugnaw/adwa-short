@@ -36,6 +36,7 @@ export function ManualDeposit() {
   const [searched, setSearched] = useState(false)
   const [selected, setSelected] = useState(null)
   const [amount, setAmount] = useState('')
+  const [coins, setCoins] = useState('')
   const [notes, setNotes] = useState('')
   const [page] = useState(1)
   const [receipt, setReceipt] = useState(null)
@@ -54,25 +55,25 @@ export function ManualDeposit() {
 
   const depositMutation = useMutation({
     mutationFn: async () => {
-      const amountNum = Number(amount)
+      const amountNum = Number(amount) || 0
+      const coinsNum = coins ? Number(coins) : 0
       if (!selected) throw new Error('Select a user first')
-      if (!amountNum || amountNum <= 0) throw new Error('Enter a valid amount')
-      const coinsCredited = Math.floor(amountNum / coinPrice)
-      return post('/admin/wallet/manual-deposit', {
+      if (amountNum <= 0 && coinsNum <= 0) throw new Error('Enter a valid amount or coin credit')
+      return post('/admin/wallet/top-up', {
         user_id: selected.id,
         amount_birr: amountNum,
-        coins_credited: coinsCredited,
+        coins_credited: coinsNum,
         notes,
       })
     },
     onSuccess: (data) => {
-      const amountNum = Number(amount)
-      const coinsCredited = Math.floor(amountNum / coinPrice)
+      const amountNum = Number(amount) || 0
+      const coinsNum = coins ? Number(coins) : 0
       toast.success('Wallet topped up successfully')
       setReceipt({
         user: selected,
         amount: amountNum,
-        coins: coinsCredited,
+        coins: coinsNum,
         reference: data.id,
         timestamp: data.created_at,
       })
@@ -80,6 +81,7 @@ export function ManualDeposit() {
       qc.invalidateQueries({ queryKey: ['users', selected.id] })
       setSelected(null)
       setAmount('')
+      setCoins('')
       setNotes('')
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to process deposit')),
@@ -215,7 +217,18 @@ export function ManualDeposit() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="e.g. 100"
-                  hint={`Auto-suggest: ${amount && Number(amount) > 0 ? Math.floor(Number(amount) / coinPrice) : 0} coins (1 coin = ${formatBirr(coinPrice)})`}
+                  hint="Credits exact fiat balance without automatically generating 1-to-1 matching coins"
+                  required
+                />
+
+                <Input
+                  label="Coins to credit (optional)"
+                  type="number"
+                  min={0}
+                  value={coins}
+                  onChange={(e) => setCoins(e.target.value)}
+                  placeholder="Leave empty for cash-only top-up"
+                  hint="Optional: Credit promotional or granted coins (independent of cash balance)"
                 />
 
                 <Textarea
@@ -241,7 +254,7 @@ export function ManualDeposit() {
 
         <Card padding="md" className="self-start">
           <CardHeader>
-            <CardTitle>Walk-in Workflow</CardTitle>
+            <CardTitle>Walk-in Top-Up Workflow</CardTitle>
           </CardHeader>
           <ol className="space-y-3 text-xs text-text-secondary">
             <li className="flex gap-2">
@@ -258,7 +271,7 @@ export function ManualDeposit() {
             </li>
             <li className="flex gap-2">
               <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-bold text-accent">4</span>
-              <span>Coins auto-calculated from the coin price setting</span>
+              <span>Credits exact fiat balance (no automatic coin duplication)</span>
             </li>
             <li className="flex gap-2">
               <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-bold text-accent">5</span>
@@ -266,10 +279,9 @@ export function ManualDeposit() {
             </li>
           </ol>
           <div className="mt-4 rounded-md border border-border bg-surface-2/40 p-3 text-[11px] text-text-secondary">
-            <p className="font-semibold text-text-primary">Coin price</p>
+            <p className="font-semibold text-text-primary">Decoupled Top-Up Policy</p>
             <p className="mt-1">
-              Currently set to <span className="text-accent">{formatBirr(coinPrice)}</span> per coin.
-              Change this in <span className="text-text-primary">Settings → Pricing</span>.
+              Cash deposits credit the user's Birr balance 1:1. Users can purchase Coin Packages, Time Passes, or Subscriptions independently using their wallet.
             </p>
           </div>
         </Card>
@@ -368,9 +380,13 @@ export function ManualDeposit() {
 
               <div className="space-y-2 text-sm">
                 <Row label="Cash received" value={formatBirr(receipt.amount)} bold />
-                <Row label="Coins credited" value={`${receipt.coins} c`} bold />
+                {receipt.coins > 0 ? (
+                  <Row label="Coins credited" value={`${receipt.coins} c`} bold />
+                ) : (
+                  <Row label="Coins credited" value="0 c (Fiat Only)" />
+                )}
                 <Row
-                  label="Top-up amount"
+                  label="Fiat Top-up Credited"
                   value={formatBirr(receipt.amount)}
                 />
               </div>
