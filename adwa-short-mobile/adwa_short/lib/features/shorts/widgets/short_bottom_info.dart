@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../models/short_item.dart';
+import '../../series/providers/series_provider.dart';
 
 class ShortBottomInfo extends StatefulWidget {
   const ShortBottomInfo({
@@ -37,9 +39,30 @@ class _ShortBottomInfoState extends State<ShortBottomInfo> {
         (item.episodeNumber != null && item.episodeNumber! > 0
             ? item.episodeNumber!
             : 0);
-    final total = (widget.totalEpisodes != null && widget.totalEpisodes! > 0)
+    int total = (widget.totalEpisodes != null && widget.totalEpisodes! > 0)
         ? widget.totalEpisodes!
         : (item.totalEpisodes > 0 ? item.totalEpisodes : 0);
+
+    if (item.seriesId.isNotEmpty) {
+      try {
+        final sp = Provider.of<SeriesProvider>(context, listen: true);
+        final loaded = sp.series;
+        if (loaded != null &&
+            (loaded.id == item.seriesId || item.seriesId.isEmpty)) {
+          final loadedEpCount = loaded.episodes.length;
+          final loadedTotal = loaded.totalEpisodes;
+          final bestCount =
+              loadedEpCount > loadedTotal ? loadedEpCount : loadedTotal;
+          if (bestCount > total) {
+            total = bestCount;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (currentEp > total && total > 0) {
+      total = currentEp;
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

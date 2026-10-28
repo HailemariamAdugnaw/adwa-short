@@ -16,6 +16,7 @@ class EpisodeSelectorSheet extends StatefulWidget {
     required this.seriesId,
     this.currentEpisodeId,
     this.currentEpisodeNumber,
+    this.initialSeries,
     this.onEpisodeSelected,
     this.onSelectEpisode,
   });
@@ -23,6 +24,7 @@ class EpisodeSelectorSheet extends StatefulWidget {
   final String seriesId;
   final String? currentEpisodeId;
   final int? currentEpisodeNumber;
+  final Series? initialSeries;
   final void Function(Episode episode)? onEpisodeSelected;
   final void Function(Episode episode)? onSelectEpisode;
 
@@ -31,6 +33,7 @@ class EpisodeSelectorSheet extends StatefulWidget {
     required String seriesId,
     String? currentEpisodeId,
     int? currentEpisodeNumber,
+    Series? initialSeries,
     void Function(Episode episode)? onEpisodeSelected,
     void Function(Episode episode)? onSelectEpisode,
   }) {
@@ -46,6 +49,7 @@ class EpisodeSelectorSheet extends StatefulWidget {
         seriesId: seriesId,
         currentEpisodeId: currentEpisodeId,
         currentEpisodeNumber: currentEpisodeNumber,
+        initialSeries: initialSeries,
         onEpisodeSelected: onEpisodeSelected,
         onSelectEpisode: onSelectEpisode,
       ),
@@ -68,8 +72,9 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    final initialSeries = context.read<SeriesProvider>().series;
-    if (initialSeries != null && initialSeries.id == widget.seriesId) {
+    final initialSeries = widget.initialSeries ?? context.read<SeriesProvider>().series;
+    if (initialSeries != null &&
+        (initialSeries.id == widget.seriesId || widget.seriesId.isEmpty)) {
       _series = initialSeries;
       _loading = false;
       _initActiveTab();
@@ -94,6 +99,14 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
     _initActiveTab();
   }
 
+  int _getTotalEpisodesCount(Series s) {
+    int total = s.totalEpisodes;
+    if (s.episodes.length > total) {
+      total = s.episodes.length;
+    }
+    return total > 0 ? total : s.episodes.length;
+  }
+
   void _initActiveTab() {
     final s = _series;
     if (s == null) return;
@@ -106,9 +119,7 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   }
 
   int _tabCount(Series s) {
-    final total = s.episodes.isNotEmpty
-        ? s.episodes.length
-        : s.totalEpisodes;
+    final total = _getTotalEpisodesCount(s);
     if (total <= 0) return 1;
     return ((total - 1) ~/ _perPage) + 1;
   }
@@ -123,9 +134,7 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
 
   String _rangeLabel(int tab) {
     final start = tab * _perPage + 1;
-    final total = _series?.episodes.length ??
-        _series?.totalEpisodes ??
-        0;
+    final total = _series != null ? _getTotalEpisodesCount(_series!) : 0;
     final end = (start + _perPage - 1).clamp(start, total > 0 ? total : start);
     return '$start-$end';
   }
@@ -161,9 +170,7 @@ class _EpisodeSelectorSheetState extends State<EpisodeSelectorSheet> {
   }
 
   String _latestUpdateLabel(Series s) {
-    final total = s.episodes.isNotEmpty
-        ? s.episodes.length
-        : s.totalEpisodes;
+    final total = _getTotalEpisodesCount(s);
     if (total <= 0) return 'No episodes yet';
     return 'Update to EP.$total/EP.$total';
   }

@@ -90,14 +90,24 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
   }
 
   int _getTotalEpisodes(Series? providerSeries, List<Episode> episodes) {
+    int total = 0;
     if (providerSeries != null &&
-        (providerSeries.id == widget.series.id || widget.series.id.isEmpty) &&
-        providerSeries.totalEpisodes > 0) {
-      return providerSeries.totalEpisodes;
+        (providerSeries.id == widget.series.id || widget.series.id.isEmpty)) {
+      total = providerSeries.totalEpisodes;
+      if (providerSeries.episodes.length > total) {
+        total = providerSeries.episodes.length;
+      }
     }
-    if (widget.series.totalEpisodes > 0) return widget.series.totalEpisodes;
-    if (episodes.isNotEmpty) return episodes.length;
-    return episodes.length;
+    if (total <= 0) {
+      total = widget.series.totalEpisodes;
+      if (widget.series.episodes.length > total) {
+        total = widget.series.episodes.length;
+      }
+    }
+    if (episodes.length > total) {
+      total = episodes.length;
+    }
+    return total > 0 ? total : episodes.length;
   }
 
   int _calculateInitialIndex(Episode episode, Series series,
@@ -248,6 +258,10 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       seriesId: widget.series.id,
       currentEpisodeId: _currentEpisode.id,
       currentEpisodeNumber: epNum,
+      initialSeries: (providerSeries != null &&
+              (providerSeries.id == widget.series.id || widget.series.id.isEmpty))
+          ? providerSeries
+          : widget.series,
       onEpisodeSelected: (ep) => _onEpisodeSelected(ep),
     );
   }

@@ -190,6 +190,20 @@ void main() {
       });
       expect(ep3.videoUrl, 'https://example.com/stream3.m3u8');
     });
+
+    test('Series.fromJson computes totalEpisodes from episodes.length when total_episodes is 0 or absent', () {
+      final s = Series.fromJson({
+        'id': '99',
+        'title': 'Test Series',
+        'total_episodes': 0,
+        'episodes': [
+          {'id': '1', 'series_id': '99', 'number': 1, 'title': 'Ep 1'},
+          {'id': '2', 'series_id': '99', 'number': 2, 'title': 'Ep 2'},
+          {'id': '3', 'series_id': '99', 'number': 3, 'title': 'Ep 3'},
+        ],
+      });
+      expect(s.totalEpisodes, 3);
+    });
   });
 
   group('ShortBottomInfo Episode Bar formatting', () {
@@ -266,6 +280,54 @@ void main() {
       expect(arrowFinder, findsOneWidget);
       await tester.tap(arrowFinder);
       expect(arrowTapped, isTrue);
+    });
+
+    testWidgets('resolves totalEpisodes from SeriesProvider when widget totalEpisodes is 0', (tester) async {
+      final fakeSeries = Series(
+        id: '10',
+        title: 'Echoes of Addis',
+        totalEpisodes: 0, // Uninitialized / 0 in metadata
+        episodes: List.generate(
+          42,
+          (i) => Episode(
+            id: '${i + 1}',
+            seriesId: '10',
+            number: i + 1,
+            title: 'Episode ${i + 1}',
+            videoUrl: 'https://example.com/ep_${i + 1}.mp4',
+            durationSeconds: 120,
+          ),
+        ),
+      );
+
+      final item = ShortItem(
+        id: '3',
+        seriesId: '10',
+        episodeId: '3',
+        title: 'Episode 3',
+        verticalVideoUrl: 'https://example.com/video3.mp4',
+        episodeNumber: 3,
+        totalEpisodes: 0, // 0 in item
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<SeriesProvider>.value(
+            value: _FakeSeriesProvider(fakeSeries),
+            child: Scaffold(
+              body: ShortBottomInfo(
+                item: item,
+                currentEpisodeNumber: 3,
+                totalEpisodes: 0,
+                previewMode: false,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Successfully resolved from 42 episodes in SeriesProvider
+      expect(find.text('EP.3 / 42 EP'), findsOneWidget);
     });
   });
 
@@ -409,6 +471,64 @@ void main() {
 
       // Verify bottom sheet is dismissed
       expect(find.byType(EpisodeSelectorSheet), findsNothing);
+    });
+
+    testWidgets('EpisodeSelectorSheet calculates tabs and total count from episodes.length when series totalEpisodes is 0',
+        (tester) async {
+      final episodes = List.generate(
+        67,
+        (i) => Episode(
+          id: 'ep_${i + 1}',
+          seriesId: 'series_67',
+          number: i + 1,
+          title: 'Episode ${i + 1}',
+          videoUrl: 'https://example.com/ep${i + 1}.mp4',
+        ),
+      );
+
+      final series = Series(
+        id: 'series_67',
+        title: '67 Episode Drama',
+        totalEpisodes: 0, // Uninitialized / 0
+        episodes: episodes,
+      );
+
+      final fakeProvider = _FakeSeriesProvider(series);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<SeriesProvider>.value(value: fakeProvider),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (ctx) => ElevatedButton(
+                  onPressed: () {
+                    EpisodeSelectorSheet.show(
+                      ctx,
+                      seriesId: 'series_67',
+                      currentEpisodeNumber: 1,
+                    );
+                  },
+                  child: const Text('Open Sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(find.byType(EpisodeSelectorSheet), findsOneWidget);
+      // Tabs: 1-25, 26-50, 51-67
+      expect(find.text('1-25'), findsOneWidget);
+      expect(find.text('26-50'), findsOneWidget);
+      expect(find.text('51-67'), findsOneWidget);
+      expect(find.text('Update to EP.67/EP.67'), findsOneWidget);
     });
   });
 

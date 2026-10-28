@@ -136,6 +136,7 @@ async def get_series(
     series_dict["free_episode_count"] = series.free_episode_count
     series_dict["effective_coin_cost"] = eff_series_coin
     series_dict["coin_cost"] = series.coin_cost
+    series_dict["total_episodes"] = max(series.total_episodes or 0, len(enriched_episodes))
     return SeriesDetailOut(**series_dict, episodes=enriched_episodes)
 
 

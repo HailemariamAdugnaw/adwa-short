@@ -313,11 +313,16 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
   void _showEpisodesSheet(ShortItem item) {
     if (item.seriesId.isNotEmpty) {
+      final cached = context.read<SeriesProvider>().series;
+      final initialSeries = (cached != null && cached.id == item.seriesId)
+          ? cached
+          : null;
       EpisodeSelectorSheet.show(
         context,
         seriesId: item.seriesId,
         currentEpisodeId: item.episodeId,
         currentEpisodeNumber: item.episodeNumber,
+        initialSeries: initialSeries,
         onEpisodeSelected: (ep) {
           final episode = ep;
           final series = _toSeries(item, episode);
@@ -339,13 +344,18 @@ class _ShortsScreenState extends State<ShortsScreen> {
             cached.episodes.isNotEmpty)
         ? cached.episodes
         : [episode];
+    int total = item.totalEpisodes;
+    if (cached != null && cached.id == item.seriesId) {
+      if (cached.totalEpisodes > total) total = cached.totalEpisodes;
+      if (cached.episodes.length > total) total = cached.episodes.length;
+    }
+    if (episodes.length > total) total = episodes.length;
     return Series(
       id: item.seriesId,
       title: item.seriesTitle ?? item.title,
       description: item.description,
       posterUrl: item.thumbnailUrl,
-      totalEpisodes:
-          item.totalEpisodes > 0 ? item.totalEpisodes : episodes.length,
+      totalEpisodes: total > 0 ? total : episodes.length,
       episodes: episodes,
     );
   }
@@ -466,9 +476,22 @@ class _ShortsScreenState extends State<ShortsScreen> {
                   : 'pass')
               : item.accessReason;
 
+          final seriesProvider = context.watch<SeriesProvider>();
+          final cachedSeries = seriesProvider.series;
+          int effectiveTotal = item.totalEpisodes;
+          if (cachedSeries != null && cachedSeries.id == item.seriesId) {
+            if (cachedSeries.totalEpisodes > effectiveTotal) {
+              effectiveTotal = cachedSeries.totalEpisodes;
+            }
+            if (cachedSeries.episodes.length > effectiveTotal) {
+              effectiveTotal = cachedSeries.episodes.length;
+            }
+          }
+
           return ShortVideoItem(
             item: item,
-            totalEpisodes: item.totalEpisodes,
+            totalEpisodes:
+                effectiveTotal > 0 ? effectiveTotal : item.totalEpisodes,
             isAccessible: effectivelyAccessible,
             accessReason: effectiveReason,
             autoPlay: widget.active && isCurrent,

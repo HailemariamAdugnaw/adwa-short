@@ -93,6 +93,7 @@ class ShortItem {
       seriesTitle: json['series_title']?.toString(),
       totalEpisodes: _asInt(json['total_episodes']) ??
           _asInt(json['episode_count']) ??
+          _asInt(json['total']) ??
           0,
       averageRating: _asDouble(json['average_rating']),
       ratingCount: _asInt(json['rating_count']),

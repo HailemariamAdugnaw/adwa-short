@@ -96,6 +96,12 @@ class Series {
     } else {
       episodesList = const [];
     }
+    final parsedTotal =
+        _asInt(json['total_episodes']) ?? _asInt(json['episode_count']) ?? 0;
+    final resolvedTotalEpisodes = parsedTotal > 0
+        ? (episodesList.length > parsedTotal ? episodesList.length : parsedTotal)
+        : episodesList.length;
+
     return Series(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? 'Untitled',
@@ -110,8 +116,7 @@ class Series {
       isExclusive: json['is_exclusive'] == true,
       isHot: json['is_hot'] == true,
       isNewRelease: json['is_new_release'] == true,
-      totalEpisodes:
-          _asInt(json['total_episodes']) ?? _asInt(json['episode_count']) ?? 0,
+      totalEpisodes: resolvedTotalEpisodes,
       freeEpisodeCount: freeCount,
       coinCost: parsedCoinCost,
       episodes: episodesList,

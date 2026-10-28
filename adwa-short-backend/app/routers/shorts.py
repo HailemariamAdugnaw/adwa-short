@@ -38,6 +38,7 @@ async def _build_item(
     ep: Episode,
     series: Series,
     user: User | None,
+    series_episode_counts: dict[int, int] | None = None,
 ) -> ShortsFeedItem:
     is_accessible = False
     access_reason = "need_subscription"
@@ -62,7 +63,11 @@ async def _build_item(
         thumbnail_url=ep.thumbnail_url,
         duration_seconds=ep.duration_seconds,
         episode_number=ep.episode_number,
-        total_episodes=series.total_episodes,
+        total_episodes=(
+            series_episode_counts[ep.series_id]
+            if (series.total_episodes or 0) <= 0 and series_episode_counts and ep.series_id in series_episode_counts
+            else (series.total_episodes or 0)
+        ),
         view_count=ep.view_count,
         coin_cost=await get_effective_coin_cost(db, series, ep),
         is_short=ep.is_short,
@@ -87,9 +92,21 @@ async def shorts_feed(
         .limit(limit)
         .offset(offset)
     )
+    rows = res.all()
+    series_ids = {series.id for _, series in rows if (series.total_episodes or 0) <= 0}
+    series_counts: dict[int, int] = {}
+    if series_ids:
+        count_res = await db.execute(
+            select(Episode.series_id, func.count(Episode.id))
+            .where(Episode.series_id.in_(series_ids), Episode.is_published.is_(True))
+            .group_by(Episode.series_id)
+        )
+        for s_id, cnt in count_res.all():
+            series_counts[s_id] = cnt
+
     out: list[ShortsFeedItem] = []
-    for ep, series in res.all():
-        out.append(await _build_item(db, ep, series, user))
+    for ep, series in rows:
+        out.append(await _build_item(db, ep, series, user, series_counts))
     return out
 
 
