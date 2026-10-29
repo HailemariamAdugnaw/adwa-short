@@ -164,7 +164,13 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-  void _continueAsGuest() {
+  void _continueAsGuest() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      await auth.continueAsGuest();
+    } catch (_) {}
+
+    if (!mounted) return;
     final args = ModalRoute.of(context)?.settings.arguments;
     final bool isFromModalPrompt = args is Map && args.containsKey('message');
 

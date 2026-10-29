@@ -47,6 +47,9 @@ async def public_settings(db: AsyncSession = Depends(get_db)):
         ad_unlock_ads_required=int(rule.ads_required) if rule else 2,
         ad_unlock_episodes_unlocked=int(rule.episodes_unlocked) if rule else 1,
         default_episode_coin_cost=_to_int(sd.get("default_episode_coin_cost", "10"), 10),
+        intro_poster_enabled=_to_bool(sd.get("intro_poster_enabled", "true"), True),
+        intro_poster_countdown_seconds=_to_int(sd.get("intro_poster_countdown_seconds", "5"), 5),
+        intro_poster_series_id=_to_int(sd.get("intro_poster_series_id", "0"), 0) or None,
     )
 
 

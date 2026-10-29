@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../models/user.dart';
 import '../repositories/auth_repository.dart';
@@ -21,20 +22,67 @@ class AuthProvider extends ChangeNotifier {
   User? get user => _user;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+  bool get isGuest => _repository.tokenManager.isGuest;
+
+  Future<void> continueAsGuest() async {
+    await logout();
+    await _repository.setGuest(true);
+    _user = null;
+    _status = AuthStatus.unauthenticated;
+    notifyListeners();
+    onAuthStateChanged?.call(null, false);
+  }
 
   Future<void> bootstrap() async {
     _status = AuthStatus.loading;
     notifyListeners();
-    try {
-      _user = await _repository.fetchMe();
-      _status = AuthStatus.authenticated;
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+
+    final tokenManager = _repository.tokenManager;
+    final hasToken = tokenManager.accessToken != null &&
+        tokenManager.accessToken!.isNotEmpty;
+    final savedUser = tokenManager.getSavedUser();
+
+    // 1. If user previously logged in, restore local authentication immediately
+    if (hasToken || tokenManager.isLoggedIn) {
+      if (savedUser != null) {
+        _user = savedUser;
+        _status = AuthStatus.authenticated;
+        notifyListeners();
+        onAuthStateChanged?.call(_user, true);
+      }
+
+      // 2. Refresh profile with backend in background without dropping session on network error
+      try {
+        final freshUser = await _repository.fetchMe();
+        _user = freshUser;
+        _status = AuthStatus.authenticated;
+      } on ApiException catch (e) {
+        // Only invalidate if the backend explicitly rejected the token as expired
+        if (e.statusCode == 401 &&
+            (e.code == ApiConstants.errorCodeTokenExpired ||
+                e.message.toLowerCase().contains('expired'))) {
+          await logout();
+          return;
+        }
+        // If offline or other network error, keep saved user authenticated
+        if (_user != null) {
+          _status = AuthStatus.authenticated;
+        } else {
+          _status = AuthStatus.unauthenticated;
+        }
+      } catch (_) {
+        if (_user != null) {
+          _status = AuthStatus.authenticated;
+        }
+      }
+    } else if (tokenManager.isGuest) {
+      _user = null;
       _status = AuthStatus.unauthenticated;
-    } catch (e) {
-      _errorMessage = e.toString();
+    } else {
+      _user = null;
       _status = AuthStatus.unauthenticated;
     }
+
     notifyListeners();
     onAuthStateChanged?.call(_user, isAuthenticated);
   }

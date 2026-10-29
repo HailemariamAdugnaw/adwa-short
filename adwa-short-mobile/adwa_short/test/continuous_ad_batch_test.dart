@@ -8,7 +8,7 @@ import 'package:adwa_short/core/services/ad_service.dart';
 import 'package:adwa_short/core/theme/colors.dart';
 import 'package:adwa_short/models/loyalty_grant.dart';
 
-class MockTokenManager implements TokenManager {
+class MockTokenManager extends Fake implements TokenManager {
   @override
   String? get accessToken => 'mock_token';
   @override

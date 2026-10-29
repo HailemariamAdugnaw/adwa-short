@@ -12,6 +12,12 @@ class AuthRepository {
   final ApiClient _api;
   final TokenManager _tokenManager;
 
+  TokenManager get tokenManager => _tokenManager;
+
+  Future<void> setGuest(bool value) async {
+    await _tokenManager.setGuest(value);
+  }
+
   Future<User> register({
     required String phone,
     required String password,
@@ -97,11 +103,8 @@ class AuthRepository {
           json is Map<String, dynamic> ? json : <String, dynamic>{},
     );
     final user = User.fromJson(response);
-    await _tokenManager.saveUser(
-      userId: user.id,
-      phone: user.phone,
-      displayName: user.displayName,
-    );
+    await _tokenManager.saveUserProfile(user);
+    await _tokenManager.setLoggedIn(true);
     return user;
   }
 
@@ -148,11 +151,8 @@ class AuthRepository {
       refreshToken: refresh ?? '',
     );
     final user = _parseUser(response);
-    await _tokenManager.saveUser(
-      userId: user.id,
-      phone: user.phone,
-      displayName: user.displayName,
-    );
+    await _tokenManager.saveUserProfile(user);
+    await _tokenManager.setLoggedIn(true);
   }
 
   static String prettyJson(Map<String, dynamic> body) =>

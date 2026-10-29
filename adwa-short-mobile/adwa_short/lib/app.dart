@@ -8,6 +8,7 @@ import 'core/theme/theme.dart';
 import 'core/widgets/bottom_nav_bar.dart';
 import 'core/widgets/connection_lost_view.dart';
 import 'features/auth/providers/auth_provider.dart';
+import 'features/auth/screens/intro_poster_screen.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/register_screen.dart';
 import 'features/auth/screens/splash_screen.dart';
@@ -29,6 +30,7 @@ import 'features/series/screens/episode_player_screen.dart';
 import 'features/series/screens/series_detail_screen.dart';
 import 'features/shorts/screens/shorts_screen.dart';
 import 'models/episode.dart';
+import 'models/intro_poster_config.dart';
 import 'models/series.dart';
 import 'providers/app_state_provider.dart';
 
@@ -50,6 +52,18 @@ class AdwaShortApp extends StatelessWidget {
     switch (settings.name) {
       case AppRoutes.splash:
         return MaterialPageRoute(builder: (context) => const SplashScreen());
+      case AppRoutes.introPoster:
+        final args = settings.arguments as Map<String, dynamic>?;
+        return MaterialPageRoute(
+          builder: (context) => IntroPosterScreen(
+            config: args?['config'] as IntroPosterConfig?,
+            targetRoute:
+                args?['targetRoute'] as String? ?? AppRoutes.welcome,
+            onSkip: args?['onSkip'] as VoidCallback?,
+            onWatchNow: args?['onWatchNow'] as VoidCallback?,
+            onWatchSeries: args?['onWatchSeries'] as void Function(String)?,
+          ),
+        );
       case AppRoutes.welcome:
         return MaterialPageRoute(builder: (context) => const WelcomeScreen());
       case AppRoutes.login:

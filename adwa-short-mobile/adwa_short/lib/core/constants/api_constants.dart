@@ -21,6 +21,9 @@ class ApiConstants {
   static String shortsFeed({String? cursor}) =>
       cursor == null ? '/shorts/feed' : '/shorts/feed?cursor=$cursor';
 
+  static const String promotionsSplash = '/api/v1/promotions/splash';
+  static const String featuredPoster = '/api/v1/featured-poster';
+  static const String introBanner = '/series/featured/intro-banner';
   static String seriesDetail(String id) => '/series/$id';
   static const String seriesList = '/series';
   static const String engagementView = '/engagement/view';
@@ -84,6 +87,9 @@ class ApiConstants {
   static const String storageUserId = 'adwa_user_id';
   static const String storageUserPhone = 'adwa_user_phone';
   static const String storageDisplayName = 'adwa_display_name';
+  static const String storageIsLoggedIn = 'adwa_is_logged_in';
+  static const String storageIsGuest = 'adwa_is_guest';
+  static const String storageUserProfileJson = 'adwa_user_profile_json';
 
   static const String headerAuthorization = 'Authorization';
   static const String headerDeviceId = 'X-Device-Id';

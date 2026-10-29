@@ -22,6 +22,16 @@ from app.services.monetization import (
 
 router = APIRouter(prefix="/series", tags=["series"])
 
+def _to_bool(v: str, default: bool) -> bool:
+    return str(v).strip().lower() in {"1", "true", "yes", "on"}
+
+def _to_int(v: str, default: int) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
 
 @router.get("", response_model=list[SeriesOut])
 async def list_series(
@@ -77,6 +87,40 @@ async def list_series(
         out.append(SeriesOut(**s_data))
     return out
 
+
+
+@router.get("/featured/intro-banner")
+async def get_intro_banner(
+    db: AsyncSession = Depends(get_db),
+):
+    sd = await get_settings_dict(db)
+    enabled = _to_bool(sd.get("intro_poster_enabled", "true"), True)
+    countdown = _to_int(sd.get("intro_poster_countdown_seconds", "5"), 5)
+    custom_series_id = _to_int(sd.get("intro_poster_series_id", "0"), 0) or None
+
+    series = None
+    if custom_series_id:
+        sres = await db.execute(select(Series).where(Series.id == custom_series_id, Series.is_published.is_(True)))
+        series = sres.scalar_one_or_none()
+
+    if series is None:
+        sres = await db.execute(
+            select(Series)
+            .where(Series.is_published.is_(True))
+            .order_by(desc(Series.is_hot), desc(Series.is_new_release), desc(Series.popular_score), desc(Series.view_count))
+            .limit(1)
+        )
+        series = sres.scalar_one_or_none()
+
+    return {
+        "enabled": enabled,
+        "series_id": str(series.id) if series else None,
+        "title": series.title if series else "Love in the In-Between",
+        "poster_url": series.poster_url if series else None,
+        "banner_url": series.banner_url if series else None,
+        "countdown_seconds": countdown,
+        "action_text": "Watch Now",
+    }
 
 @router.get("/{series_id}", response_model=SeriesDetailOut)
 async def get_series(

@@ -1,3 +1,4 @@
+import 'package:adwa_short/core/network/token_manager.dart';
 import 'package:adwa_short/core/router/app_router.dart';
 import 'package:adwa_short/core/widgets/smooth_video_snap_scroll_physics.dart';
 import 'package:adwa_short/core/widgets/unified_video_player.dart';
@@ -36,10 +37,28 @@ class _MockScrollPosition extends Fake implements ScrollPosition {
   final ScrollDirection userScrollDirection;
 }
 
+class _FakeTokenManager extends Fake implements TokenManager {
+  @override
+  bool get isGuest => false;
+  @override
+  bool get isLoggedIn => false;
+  @override
+  String? get accessToken => null;
+  @override
+  User? getSavedUser() => null;
+}
+
 class _MockAuthRepository extends Fake implements AuthRepository {
   User? mockUser;
   bool shouldSucceed = true;
   bool loggedOut = false;
+  final TokenManager _fakeTokens = _FakeTokenManager();
+
+  @override
+  TokenManager get tokenManager => _fakeTokens;
+
+  @override
+  Future<void> setGuest(bool value) async {}
 
   @override
   Future<User> fetchMe() async {

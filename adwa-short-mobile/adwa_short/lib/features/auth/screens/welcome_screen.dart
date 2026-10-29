@@ -260,10 +260,10 @@ class WelcomeScreen extends StatelessWidget {
           onTap: () async {
             try {
               final auth = Provider.of<AuthProvider>(context, listen: false);
-              if (auth.isAuthenticated) {
-                await auth.logout();
-              }
-            } on ProviderNotFoundException {}
+              await auth.continueAsGuest();
+            } on ProviderNotFoundException {
+              // Ignore in isolated tests without AuthProvider
+            }
             if (context.mounted) {
               Navigator.of(context).pushReplacementNamed(AppRoutes.main);
             }

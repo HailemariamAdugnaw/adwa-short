@@ -28,3 +28,6 @@ class PublicSettings(BaseModel):
     ad_unlock_ads_required: int
     ad_unlock_episodes_unlocked: int
     default_episode_coin_cost: int = 10
+    intro_poster_enabled: bool = True
+    intro_poster_countdown_seconds: int = 5
+    intro_poster_series_id: Optional[int] = None
