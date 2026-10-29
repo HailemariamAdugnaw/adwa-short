@@ -140,13 +140,11 @@ class _AuthScreenState extends State<AuthScreen>
       wp.loadAccessDashboard(refresh: true);
     } catch (_) {}
 
-    final args = ModalRoute.of(context)?.settings.arguments;
-    final bool isFromModalPrompt = args is Map && args.containsKey('message');
-
-    if (isFromModalPrompt && Navigator.of(context).canPop()) {
-      Navigator.of(context).pop(true);
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop(true);
     } else {
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (_) => false);
+      nav.pushReplacementNamed(AppRoutes.main);
     }
   }
 
@@ -171,13 +169,11 @@ class _AuthScreenState extends State<AuthScreen>
     } catch (_) {}
 
     if (!mounted) return;
-    final args = ModalRoute.of(context)?.settings.arguments;
-    final bool isFromModalPrompt = args is Map && args.containsKey('message');
-
-    if (isFromModalPrompt && Navigator.of(context).canPop()) {
-      Navigator.of(context).pop(false);
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop(false);
     } else {
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (_) => false);
+      nav.pushReplacementNamed(AppRoutes.main);
     }
   }
 

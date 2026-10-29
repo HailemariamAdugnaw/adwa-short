@@ -71,6 +71,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _promptAuth({String? title, String? message}) async {
+    if (!mounted) return;
     final ok = await GuestAuthPrompt.show(
       context,
       title: title,
@@ -83,6 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _guardAuth(
       VoidCallback? action, String title, String message) async {
+    if (!mounted) return;
     final auth = context.read<AuthProvider>();
     if (!auth.isAuthenticated) {
       final ok = await GuestAuthPrompt.show(
@@ -93,6 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!ok || !mounted) return;
       await _onRefresh();
     }
+    if (!mounted) return;
     action?.call();
   }
 
@@ -540,12 +543,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // Sign In button
                     Expanded(
                       child: GestureDetector(
-                        onTap: () {
-                          Navigator.of(context)
-                              .pushNamed(AppRoutes.login)
-                              .then((_) {
-                            if (mounted) _onRefresh();
-                          });
+                        onTap: () async {
+                          await Navigator.of(context, rootNavigator: true)
+                              .pushNamed(AppRoutes.login);
+                          if (mounted) {
+                            await _onRefresh();
+                          }
                         },
                         child: Container(
                           height: 42,
@@ -589,12 +592,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // Register button
                     Expanded(
                       child: GestureDetector(
-                        onTap: () {
-                          Navigator.of(context)
-                              .pushNamed(AppRoutes.register)
-                              .then((_) {
-                            if (mounted) _onRefresh();
-                          });
+                        onTap: () async {
+                          await Navigator.of(context, rootNavigator: true)
+                              .pushNamed(AppRoutes.register);
+                          if (mounted) {
+                            await _onRefresh();
+                          }
                         },
                         child: Container(
                           height: 42,

@@ -316,6 +316,106 @@ void main() {
       expect(find.text('VIP'), findsNothing);
     });
 
+    testWidgets('Tapping Sign In / Register from ProfileScreen opens bottom sheet auth prompt safely without navigation crash', (tester) async {
+      final mockAuth = MockAuthProvider()..setAuthenticated(false);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: mockAuth),
+            ChangeNotifierProvider<WalletProvider>(create: (_) => WalletProvider(fakeApi)),
+            ChangeNotifierProvider<DownloadProvider>(create: (_) => DownloadProvider()),
+          ],
+          child: MaterialApp(
+            routes: {
+              '/login': (_) => const Scaffold(body: Text('Login Screen')),
+              '/register': (_) => const Scaffold(body: Text('Register Screen')),
+            },
+            home: const ProfileScreen(),
+          ),
+        ),
+      );
+
+      // Scroll to Sign In / Register tile
+      await tester.scrollUntilVisible(find.text('Sign In / Register'), 300);
+      expect(find.text('Sign In / Register'), findsOneWidget);
+
+      // Tap Sign In / Register to trigger _promptAuth -> GuestAuthPrompt.show
+      await tester.tap(find.text('Sign In / Register'));
+      await tester.pumpAndSettle();
+
+      // Verify the GuestAuthPrompt modal bottom sheet opened
+      expect(find.text('Sign In to Your Account'), findsOneWidget);
+      expect(find.text('Sign In'), findsWidgets);
+      expect(find.text('Create an Account'), findsOneWidget);
+      expect(find.text('Continue as Guest'), findsOneWidget);
+
+      // Tap Continue as Guest to dismiss
+      await tester.tap(find.text('Continue as Guest'));
+      await tester.pumpAndSettle();
+
+      // Modal is dismissed, ProfileScreen is still active and mounted
+      expect(find.text('Sign In to Your Account'), findsNothing);
+      expect(find.text('Sign In / Register'), findsOneWidget);
+    });
+
+    testWidgets('Tapping Sign In inside GuestAuthPrompt pushes login and pops safely without navigator history crash', (tester) async {
+      final mockAuth = MockAuthProvider()..setAuthenticated(false);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: mockAuth),
+            ChangeNotifierProvider<WalletProvider>(create: (_) => WalletProvider(fakeApi)),
+            ChangeNotifierProvider<DownloadProvider>(create: (_) => DownloadProvider()),
+          ],
+          child: MaterialApp(
+            routes: {
+              '/login': (ctx) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final nav = Navigator.of(ctx);
+                      if (nav.canPop()) {
+                        nav.pop(true);
+                      }
+                    },
+                    child: const Text('Simulate Login Success'),
+                  ),
+                ),
+              ),
+              '/register': (_) => const Scaffold(body: Text('Register Screen')),
+            },
+            home: const ProfileScreen(),
+          ),
+        ),
+      );
+
+      // Scroll to Sign In / Register tile
+      await tester.scrollUntilVisible(find.text('Sign In / Register'), 300);
+      await tester.tap(find.text('Sign In / Register'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sign In to Your Account'), findsOneWidget);
+
+      // Tap Sign In inside the GuestAuthPrompt
+      final signInButtons = find.text('Sign In');
+      await tester.tap(signInButtons.first);
+      await tester.pumpAndSettle();
+
+      // Now on the Login route
+      expect(find.text('Simulate Login Success'), findsOneWidget);
+
+      // Complete login
+      await tester.tap(find.text('Simulate Login Success'));
+      await tester.pumpAndSettle();
+
+      // Should pop back past Login AND past GuestAuthPrompt back to ProfileScreen
+      expect(find.text('Simulate Login Success'), findsNothing);
+      expect(find.text('Sign In to Your Account'), findsNothing);
+      expect(find.text('Sign In / Register'), findsOneWidget);
+    });
+
     testWidgets('AuthScreen smoothly switches between Sign In and Create Account tabs', (tester) async {
       final mockAuth = MockAuthProvider();
 

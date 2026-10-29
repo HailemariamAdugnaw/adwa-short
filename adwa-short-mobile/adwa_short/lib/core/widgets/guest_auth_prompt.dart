@@ -29,6 +29,7 @@ class GuestAuthPrompt extends StatelessWidget {
   }) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (sheetContext) => GuestAuthPrompt(
@@ -142,12 +143,13 @@ class GuestAuthPrompt extends StatelessWidget {
                 expanded: true,
                 size: AdwaButtonSize.lg,
                 onPressed: () async {
-                  final loggedIn = await Navigator.of(context).pushNamed(
+                  final nav = Navigator.of(context, rootNavigator: true);
+                  final loggedIn = await nav.pushNamed(
                     AppRoutes.login,
-                    arguments: {'message': message},
+                    arguments: {'message': message, 'fromModal': true},
                   );
-                  if (context.mounted) {
-                    Navigator.of(context).pop(loggedIn == true);
+                  if (context.mounted && nav.canPop()) {
+                    nav.pop(loggedIn == true);
                   }
                 },
               ),
@@ -161,12 +163,13 @@ class GuestAuthPrompt extends StatelessWidget {
                 expanded: true,
                 size: AdwaButtonSize.lg,
                 onPressed: () async {
-                  final registered = await Navigator.of(context).pushNamed(
+                  final nav = Navigator.of(context, rootNavigator: true);
+                  final registered = await nav.pushNamed(
                     AppRoutes.register,
-                    arguments: {'message': message},
+                    arguments: {'message': message, 'fromModal': true},
                   );
-                  if (context.mounted) {
-                    Navigator.of(context).pop(registered == true);
+                  if (context.mounted && nav.canPop()) {
+                    nav.pop(registered == true);
                   }
                 },
               ),
@@ -174,7 +177,12 @@ class GuestAuthPrompt extends StatelessWidget {
 
               // Action 3: Continue as Guest / Dismiss
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
+                onPressed: () {
+                  final nav = Navigator.of(context, rootNavigator: true);
+                  if (nav.canPop()) {
+                    nav.pop(false);
+                  }
+                },
                 child: Text(
                   'Continue as Guest',
                   style: AppTextStyles.body3.copyWith(
