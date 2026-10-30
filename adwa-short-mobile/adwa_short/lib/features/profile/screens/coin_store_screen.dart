@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/coin_stack_icon.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
+import '../../../core/widgets/monetization_description_section.dart';
 import '../../../models/coin_package.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/wallet_provider.dart';
@@ -57,12 +59,13 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
 
     final method = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -127,11 +130,14 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  'CBE / CBE Birr',
-                                  style: AppTextStyles.body1.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
+                                Flexible(
+                                  child: Text(
+                                    'CBE / CBE Birr',
+                                    style: AppTextStyles.body1.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -350,12 +356,40 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: p.packages.length,
+      itemCount: p.packages.length + 1,
       itemBuilder: (_, i) {
-        final pkg = p.packages[i];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: _packageCard(pkg),
+        if (i < p.packages.length) {
+          final pkg = p.packages[i];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _packageCard(pkg),
+          );
+        }
+        return const MonetizationDescriptionSection(
+          rules: [
+            DescriptionRule(
+              title: 'Unlock short drama episodes',
+              body:
+                  'Coins and Bonus Coins are used to unlock premium episodes of ADWA SHORT original series.',
+            ),
+            DescriptionRule(
+              title: 'Top-up via CBE & Birr',
+              body:
+                  'Top-ups are processed in Ethiopian Birr (ETB) via Commercial Bank of Ethiopia (CBE / CBE Birr). 1 Coin = 1 Bonus Coin in purchasing power. All coin top-ups are non-refundable.',
+            ),
+            DescriptionRule(
+              title: 'Bonus Coins & wallet tracking',
+              body:
+                  'Bonus Coins are applied first during episode unlocks. Check your active coin balances and bonus expiration dates in the My Wallet section of the app.',
+            ),
+            DescriptionRule(
+              title: 'Permanent library access',
+              body:
+                  'Unlocked drama episodes remain permanently accessible in your account library with no recurring charges.',
+            ),
+          ],
+          footerPrefix: 'Recharge means agree to the ',
+          footerLink: 'Recharge Agreement',
         );
       },
     );
@@ -364,107 +398,151 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
   Widget _packageCard(CoinPackage pkg) {
     final formattedPrice = Formatters.birr(pkg.priceBirr, withDecimals: false);
 
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F080A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.bloodRed.withValues(alpha: 0.8),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.bloodRed.withValues(alpha: 0.18),
-            blurRadius: 14,
-            spreadRadius: 0,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () => _onPurchase(pkg),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F080A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: pkg.isPopular
+                ? AppColors.bloodRed
+                : AppColors.bloodRed.withValues(alpha: 0.6),
+            width: 1.2,
           ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Red atmospheric corner gradient glow
-          Positioned(
-            top: -25,
-            left: -25,
-            child: Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.bloodRed.withValues(alpha: 0.35),
-                    Colors.transparent,
-                  ],
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.bloodRed.withValues(alpha: 0.18),
+              blurRadius: 14,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Red atmospheric corner gradient glow
+            Positioned(
+              top: -25,
+              left: -25,
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.bloodRed.withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // LEFT SIDE: 3D Gold Coin Icon
-                _goldCoin3D(),
-                const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // LEFT SIDE: CoinStackIcon in glowing circle badge
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF1A0A0E),
+                      border: Border.all(
+                        color: AppColors.bloodRed.withValues(alpha: 0.4),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.bloodRed.withValues(alpha: 0.2),
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const CoinStackIcon(
+                      size: 24,
+                      color: Color(0xFFFFC837),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
 
-                // CENTER: Title, Coins amount, Unlocks subtitle
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        pkg.name,
-                        style: AppTextStyles.h3.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${Formatters.thousands(pkg.totalCoins)} coins',
-                        style: AppTextStyles.body1.copyWith(
-                          color: const Color(0xFFFFC837),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (pkg.episodesUnlocked > 0) ...[
-                        const SizedBox(height: 4),
+                  // CENTER: Title, Coins amount with CoinStackIcon, Bonus subtitle
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Text(
-                          '+ Unlocks ${pkg.episodesUnlocked} episodes',
-                          style: AppTextStyles.caption.copyWith(
-                            color: const Color(0xFF8E8E93),
-                            fontSize: 12,
+                          pkg.name,
+                          style: AppTextStyles.h3.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const CoinStackIcon(
+                              size: 15,
+                              color: Color(0xFFFFC837),
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                '${Formatters.thousands(pkg.totalCoins)} coins',
+                                style: AppTextStyles.body1.copyWith(
+                                  color: const Color(0xFFFFC837),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (pkg.bonusCoins > 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '+ ${Formatters.thousands(pkg.bonusCoins)} bonus coins',
+                            style: AppTextStyles.caption.copyWith(
+                              color: const Color(0xFF8E8E93),
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(width: 10),
+                  const SizedBox(width: 10),
 
-                // RIGHT SIDE: Pill-shaped glowing red Buy button with price
-                GestureDetector(
-                  onTap: () => _onPurchase(pkg),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
+                  // RIGHT SIDE: Pill-shaped glowing Blood Red capsule Buy button with white text
+                  Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppColors.bloodRed,
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFFE50914),
+                          Color(0xFFB00710),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -487,126 +565,11 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _goldCoin3D() {
-    return SizedBox(
-      width: 60,
-      height: 60,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Subtle golden glow cast downward and to its right
-          Positioned(
-            left: 10,
-            top: 10,
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFFB800).withValues(alpha: 0.65),
-                    blurRadius: 18,
-                    spreadRadius: 4,
-                    offset: const Offset(6, 8),
-                  ),
-                  BoxShadow(
-                    color: AppColors.bloodRed.withValues(alpha: 0.35),
-                    blurRadius: 22,
-                    spreadRadius: 6,
-                    offset: const Offset(8, 10),
-                  ),
                 ],
               ),
             ),
-          ),
-          // 3D Isometric Gold Coin tilted ~50° facing top-right/viewer
-          Transform(
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0025)
-              ..rotateX(-0.42)
-              ..rotateY(0.92)
-              ..rotateZ(-0.28),
-            alignment: Alignment.center,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFFFF7C2),
-                    Color(0xFFFFC837),
-                    Color(0xFFD48B00),
-                    Color(0xFF6B4200),
-                  ],
-                  stops: [0.0, 0.35, 0.7, 1.0],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    blurRadius: 7,
-                    offset: const Offset(5, 6),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(3.5),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF8A5C00).withValues(alpha: 0.85),
-                      width: 1.2,
-                    ),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                      colors: [
-                        Color(0xFFFFEA7B),
-                        Color(0xFFFFB800),
-                        Color(0xFF9E6500),
-                      ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFFFF9D4),
-                            Color(0xFFFFC01D),
-                            Color(0xFFB87800),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: const Color(0xFFFFF2A1).withValues(alpha: 0.9),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

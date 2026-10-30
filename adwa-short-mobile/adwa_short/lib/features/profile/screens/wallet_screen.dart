@@ -5,6 +5,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/adwa_button.dart';
+import '../../../core/widgets/coin_stack_icon.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/guest_auth_prompt.dart';
@@ -110,62 +111,136 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Future<num?> _showDepositDialog() async {
     final controller = TextEditingController(text: '100');
-    return showDialog<num>(
+    return showModalBottomSheet<num>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: Row(
-            children: [
-              const Icon(Icons.account_balance_rounded, color: AppColors.bloodRed, size: 24),
-              const SizedBox(width: 10),
-              Text('Deposit via CBE Birr', style: AppTextStyles.h3),
-            ],
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Top up your wallet automatically with Commercial Bank of Ethiopia (CBE Birr). '
-                'Instant confirmation without receipt uploads.',
-                style: AppTextStyles.body3.copyWith(color: AppColors.white.withValues(alpha: 0.8)),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  prefixText: 'ETB ',
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.bloodRed),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-                autofocus: true,
-              ),
-            ],
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.bloodRed.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.account_balance_rounded,
+                        color: AppColors.bloodRed,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Deposit via CBE Birr',
+                        style: AppTextStyles.h3.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      onPressed: () => Navigator.of(ctx).pop(null),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Top up your wallet automatically with Commercial Bank of Ethiopia (CBE Birr). '
+                  'Instant confirmation without receipt uploads.',
+                  style: AppTextStyles.body3.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.8),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    prefixText: 'ETB ',
+                    prefixStyle: TextStyle(
+                      color: AppColors.bloodRed,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    border: OutlineInputBorder(),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.bloodRed),
+                    ),
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(null),
+                        child: const Text('Cancel',
+                            style: TextStyle(color: Colors.white70)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final v = num.tryParse(controller.text.trim());
+                          Navigator.of(ctx).pop(v);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.bloodRed,
+                          foregroundColor: AppColors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Continue to CBE',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final v = num.tryParse(controller.text.trim());
-                Navigator.of(ctx).pop(v);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.bloodRed,
-                foregroundColor: AppColors.white,
-              ),
-              child: const Text('Continue to CBE'),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -333,12 +408,15 @@ class _WalletScreenState extends State<WalletScreen> {
           label: const Text(
             'Deposit via Commercial Bank of Ethiopia (CBE)',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+            textAlign: TextAlign.center,
           ),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.white,
             backgroundColor: AppColors.surface,
             side: const BorderSide(color: AppColors.bloodRed, width: 1.4),
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10)),
           ),
@@ -399,8 +477,7 @@ class _WalletScreenState extends State<WalletScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Icon(Icons.monetization_on_rounded,
-                  color: AppColors.vipGold, size: 18),
+              const CoinStackIcon(size: 18, color: AppColors.vipGold),
               const SizedBox(width: 6),
               Text(
                 Formatters.thousands(coins.toInt()),

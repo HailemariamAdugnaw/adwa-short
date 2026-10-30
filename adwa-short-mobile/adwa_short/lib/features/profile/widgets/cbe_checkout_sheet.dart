@@ -268,8 +268,11 @@ class _CbeCheckoutSheetState extends State<CbeCheckoutSheet> {
                                 color: AppColors.white,
                                 fontWeight: FontWeight.bold,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const SizedBox(width: 10),
                           Text(
                             Formatters.birr(widget.amountBirr),
                             style: AppTextStyles.h3.copyWith(
@@ -283,24 +286,31 @@ class _CbeCheckoutSheetState extends State<CbeCheckoutSheet> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Bill Reference:',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.6),
+                          Flexible(
+                            child: Text(
+                              'Bill Reference:',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.6),
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           GestureDetector(
                             onTap: () => _copyToClipboard(
                               widget.initResult.billReference,
                               'Bill Reference',
                             ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  widget.initResult.billReference,
-                                  style: AppTextStyles.body2.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
+                                Flexible(
+                                  child: Text(
+                                    widget.initResult.billReference,
+                                    style: AppTextStyles.body2.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -377,14 +387,18 @@ class _CbeCheckoutSheetState extends State<CbeCheckoutSheet> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  widget.initResult.ussdCode,
-                                  style: AppTextStyles.body1.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.2,
+                                Expanded(
+                                  child: Text(
+                                    widget.initResult.ussdCode,
+                                    style: AppTextStyles.body1.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 const Icon(
                                   Icons.copy_rounded,
                                   color: AppColors.bloodRed,
@@ -408,11 +422,16 @@ class _CbeCheckoutSheetState extends State<CbeCheckoutSheet> {
                       'Checkout Link',
                     ),
                     icon: const Icon(Icons.link_rounded),
-                    label: const Text('Copy CBE Web / App Checkout Link'),
+                    label: const Text(
+                      'Copy CBE Web / App Checkout Link',
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.bloodRed,
                       foregroundColor: AppColors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -477,10 +496,13 @@ class _CbeCheckoutSheetState extends State<CbeCheckoutSheet> {
                       color: AppColors.white,
                       fontWeight: FontWeight.bold,
                     ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.bloodRed),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),

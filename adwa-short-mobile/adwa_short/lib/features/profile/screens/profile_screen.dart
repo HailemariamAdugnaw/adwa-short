@@ -7,6 +7,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/coin_stack_icon.dart';
 import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
 import '../../../models/user.dart';
@@ -167,14 +168,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _menuTile(
                           icon: Icons.access_time_filled_rounded,
                           title: 'Buy Time Pass',
-                          subtitle: 'Unlimited access for a limited time',
+                          subtitle: 'Timed unlimited access (e.g. 24h, 7d). Watch all episodes without coins',
                           onTap: widget.onBuyPass,
                         ),
                         const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
                         _menuTile(
                           icon: Icons.workspace_premium_outlined,
                           title: 'Subscriptions',
-                          subtitle: 'Best value for binge-watchers',
+                          subtitle: 'Recurring VIP access. Full catalog streaming & exclusive perks',
                           onTap: widget.onSubscribe,
                         ),
                       ],
@@ -258,7 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _menuTile(
                           icon: Icons.access_time_filled_rounded,
                           title: 'Buy Time Pass',
-                          subtitle: 'Unlimited access for a limited time',
+                          subtitle: 'Timed unlimited access (e.g. 24h, 7d). Watch all episodes without coins',
                           onTap: () => _guardAuth(
                             widget.onBuyPass,
                             'Sign In to Buy Pass',
@@ -269,7 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _menuTile(
                           icon: Icons.workspace_premium_outlined,
                           title: 'Subscriptions',
-                          subtitle: 'Best value for binge-watchers',
+                          subtitle: 'Recurring VIP access. Full catalog streaming & exclusive perks',
                           onTap: () => _guardAuth(
                             widget.onSubscribe,
                             'Sign In to Subscribe',
@@ -920,19 +921,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFB800).withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
+                          color: const Color(0xFF1E0C12),
+                          borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                              color: const Color(0xFFFFB800), width: 1.5),
+                            color: AppColors.bloodRed.withValues(alpha: 0.7),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.bloodRed.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
                         child: const Center(
-                          child: Text(
-                            '\$',
-                            style: TextStyle(
-                              color: Color(0xFFFFB800),
-                              fontWeight: FontWeight.w900,
-                              fontSize: 18,
-                            ),
+                          child: CoinStackIcon(
+                            size: 20,
+                            color: AppColors.white,
                           ),
                         ),
                       ),
@@ -999,13 +1005,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: const Center(
-                        child: Text(
-                          '\$',
-                          style: TextStyle(
-                            color: AppColors.bloodRed,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14,
-                          ),
+                        child: CoinStackIcon(
+                          size: 15,
+                          color: AppColors.bloodRed,
+                          strokeWidth: 1.4,
                         ),
                       ),
                     ),

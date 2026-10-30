@@ -8,6 +8,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
+import '../../../core/widgets/monetization_description_section.dart';
 import '../../../models/time_pass.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/wallet_provider.dart';
@@ -60,12 +61,13 @@ class _PassesScreenState extends State<PassesScreen> {
 
     final method = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -134,11 +136,14 @@ class _PassesScreenState extends State<PassesScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  'CBE / CBE Birr',
-                                  style: AppTextStyles.body1.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
+                                Flexible(
+                                  child: Text(
+                                    'CBE / CBE Birr',
+                                    style: AppTextStyles.body1.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -363,11 +368,42 @@ class _PassesScreenState extends State<PassesScreen> {
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: p.passes.length,
-      itemBuilder: (_, i) => Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: _passCard(p.passes[i]),
-      ),
+      itemCount: p.passes.length + 1,
+      itemBuilder: (_, i) {
+        if (i < p.passes.length) {
+          final pass = p.passes[i];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _passCard(pass),
+          );
+        }
+        return const MonetizationDescriptionSection(
+          rules: [
+            DescriptionRule(
+              title: 'Unlimited drama streaming',
+              body:
+                  'Time Passes grant 100% unlimited streaming access to all series, episodes, and new releases without consuming your coins.',
+            ),
+            DescriptionRule(
+              title: 'Pass duration & stacking',
+              body:
+                  'Your pass activates instantly upon payment confirmation. Purchasing multiple passes automatically stacks remaining duration consecutively.',
+            ),
+            DescriptionRule(
+              title: 'CBE Birr payment & non-refundable',
+              body:
+                  'Pass purchases are completed via Commercial Bank of Ethiopia (CBE / CBE Birr) in Ethiopian Birr (ETB) and are non-refundable once activated.',
+            ),
+            DescriptionRule(
+              title: 'Real-time timer in My Wallet',
+              body:
+                  'Active pass countdown runs continuously (cannot be paused). Monitor your exact remaining watch time in the My Wallet section of the app.',
+            ),
+          ],
+          footerPrefix: 'Activation means agree to the ',
+          footerLink: 'Time Pass Terms of Service',
+        );
+      },
     );
   }
 

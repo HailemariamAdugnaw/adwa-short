@@ -8,6 +8,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/guest_auth_prompt.dart';
 import '../../../core/widgets/loading_shimmer.dart';
+import '../../../core/widgets/monetization_description_section.dart';
 import '../../../models/access_status.dart';
 import '../../../models/subscription.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -290,12 +291,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
     final method = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -360,11 +362,14 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  'CBE / CBE Birr',
-                                  style: AppTextStyles.body1.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
+                                Flexible(
+                                  child: Text(
+                                    'CBE / CBE Birr',
+                                    style: AppTextStyles.body1.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -585,11 +590,42 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: p.plans.length,
-      itemBuilder: (_, i) => Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: _planCard(p.plans[i]),
-      ),
+      itemCount: p.plans.length + 1,
+      itemBuilder: (_, i) {
+        if (i < p.plans.length) {
+          final plan = p.plans[i];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _planCard(plan),
+          );
+        }
+        return const MonetizationDescriptionSection(
+          rules: [
+            DescriptionRule(
+              title: 'All-access VIP membership',
+              body:
+                  'Subscriptions unlock full VIP access to all ADWA SHORT drama series, originals, and newly released episodes without coin paywalls.',
+            ),
+            DescriptionRule(
+              title: 'Ad-free & high-bitrate streaming',
+              body:
+                  'Enjoy seamless high-definition video playback with zero commercial interruptions and priority server streaming bandwidth.',
+            ),
+            DescriptionRule(
+              title: 'Flexible ETB renewal',
+              body:
+                  'Subscriptions renew automatically at the end of each billing cycle (weekly, monthly, or yearly) via your linked CBE Birr or wallet account.',
+            ),
+            DescriptionRule(
+              title: 'Cancel anytime in settings',
+              body:
+                  'Manage or cancel your subscription at any time directly through your ADWA SHORT Account Settings or My Wallet at least 24 hours before the current period ends.',
+            ),
+          ],
+          footerPrefix: 'Subscription means agree to the ',
+          footerLink: 'VIP Member Agreement',
+        );
+      },
     );
   }
 
