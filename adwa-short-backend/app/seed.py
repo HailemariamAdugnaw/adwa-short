@@ -196,6 +196,41 @@ SUBSCRIPTION_PLANS = [
     ("All Access Yearly", "yearly", 1800.0),
 ]
 
+EPISODE_VIDEO_FILES = {
+    "Echoes of Addis": [
+        "o0iBEpCfdhaII9CIotT1ZQimhkYBUCwBAY6PbA.mp4",
+        "o0R1sERCAs9IhgiqO8VFE8SuQBXfKCf3aAD0ER.mp4",
+        "o0U8QOFPf6kf5K7WHgDAIHLhjLVAcCWIDOEkfD.mp4",
+        "o47uxAfIyUEQmPIqCFwJIQiiPPE2K1lpByCpA8.mp4",
+        "o4BzMWiEIiA1PPXfv1iq8bqVkAn7qCACBAmIQ3.mp4",
+    ],
+    "Crimson Dawn": [
+        "o4cVDePIIdhLYM4ApgNQPeFpjM1YGGgbIe3IMM.mp4",
+        "o88QEdNiEFABgmggIRLDSRwQvw6DXzq13DifBe.mp4",
+        "o8esQS66XDAlN7DPzpFzDRqgMERgWBOmIwfr1E.mp4",
+        "o8VdB1dYimrsAiQCYQzIyoBg0uFTArB4CETfIG.mp4",
+    ],
+    "Threads of Love": [
+        "o8WTpI1EBwimGA0qwif4AVQPciwBC1BCC9OI7Y.mp4",
+        "oAER9fI63FRtldD9BAf6FUAVgpQLwIQGERvqNE.mp4",
+        "oceDwBDoFDUFmXYpxRS6ABjEhjiQISgfgqFutE.mp4",
+        "ocoEIiv2aGMALijIYAjVQalRCAM6oGYbDOAiB.mp4",
+        "oEADgL2f0mqIfBJCtMD2CQpZmnZREQFQCZ1Ei3.mp4",
+        "oEfXNOhtcqVyQQEelGkF6E5DB6DUoIRDjumAgD.mp4",
+    ],
+    "The Last Comedy Skit": [
+        "oEIPa1oCDAVB0oIz1BEAOiiBmsBzETQYlfiX5z.mp4",
+        "oELEl2gDGEcXxCPqA1QVEQIcfGE2FBDSaDeRnF.mp4",
+        "oEUB4BaWAxExTYzFgriB6pcdIdQanaMEEPiQK.mp4",
+    ],
+    "Family Ties": [
+        "ogAMAkzXpiiBxCcQI1iB01fVEWaNAlZXiq7rMI.mp4",
+        "ogBVIepdAYZjAIG0VCEm80LIIaI7qyekC6QfGB.mp4",
+        "ogFN4CLquACuEETQEwP56RkBVz7fEz6BEdeAID.mp4",
+        "oghRQ7lUwIAzNDfbywqe3egmeAIupFG1qQLG5L.mp4",
+    ],
+}
+
 
 async def seed() -> None:
     await create_all()
@@ -329,17 +364,18 @@ async def seed() -> None:
                 await db.flush()
                 eps: list[Episode] = []
                 for n in range(1, sd["episode_count"] + 1):
+                    video_url = f"/uploads/videos/{EPISODE_VIDEO_FILES[sd['title']][n - 1]}"
                     ep = Episode(
                         series_id=series.id,
                         creator_id=creator.id if creator else None,
                         episode_number=n,
                         title=f"{sd['title']} - Episode {n}",
                         description=f"Episode {n} of {sd['title']}",
-                        video_url=f"https://placehold.co/1280x720/{BRAND_BLACK[1:]}/{BRAND_RED[1:]}/?text=Ep{n}",
+                        video_url=video_url,
                         thumbnail_url=f"https://placehold.co/400x600/{BRAND_BLACK[1:]}/{BRAND_WHITE[1:]}/?text=Ep{n}",
                         duration_seconds=600 + n * 30,
                         is_short=(sd["type"] == "short"),
-                        vertical_video_url=(f"https://placehold.co/720x1280/{BRAND_BLACK[1:]}/{BRAND_RED[1:]}/?text=Short{n}" if sd["type"] == "short" else None),
+                        vertical_video_url=(video_url if sd["type"] == "short" else None),
                         coin_cost=0 if n <= sd["free_episode_count"] else 50,
                         is_published=True,
                         published_at=datetime.now(timezone.utc),
@@ -350,7 +386,12 @@ async def seed() -> None:
                 seeded_series.append((series, eps))
             else:
                 eres = await db.execute(select(Episode).where(Episode.series_id == series.id).order_by(Episode.episode_number))
-                seeded_series.append((series, list(eres.scalars().all())))
+                eps = list(eres.scalars().all())
+                for ep in eps:
+                    video_url = f"/uploads/videos/{EPISODE_VIDEO_FILES[sd['title']][ep.episode_number - 1]}"
+                    ep.video_url = video_url
+                    ep.vertical_video_url = video_url if sd["type"] == "short" else None
+                seeded_series.append((series, eps))
 
         sample_tx_count_res = await db.execute(select(RevenueTransaction).limit(1))
         if sample_tx_count_res.scalar_one_or_none() is None and demo is not None:
