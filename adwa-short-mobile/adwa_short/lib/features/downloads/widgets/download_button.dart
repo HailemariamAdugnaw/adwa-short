@@ -183,40 +183,14 @@ class _DownloadButtonState extends State<DownloadButton> {
       totalEpisodes: widget.series.totalEpisodes,
       thumbnailUrl: widget.episode.thumbnailUrl,
     );
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (innerContext) => Scaffold(
-          backgroundColor: AppColors.black,
-          body: SafeArea(
-            child: Stack(
-              children: [
-                PaywallOverlay(
-                  item: item,
-                  onBuyCoins: () => Navigator.of(innerContext)
-                      .pushNamed('/wallet/coins'),
-                  onBuyPass: () => Navigator.of(innerContext)
-                      .pushNamed('/wallet/passes'),
-                  onSubscribe: () => Navigator.of(innerContext)
-                      .pushNamed('/wallet/subscriptions'),
-                  onMaybeLater: () =>
-                      Navigator.of(innerContext).maybePop(),
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: AppColors.white),
-                    onPressed: () =>
-                        Navigator.of(innerContext).maybePop(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    PaywallOverlay.showModal(
+      context,
+      item: item,
+      onBuyCoins: () => Navigator.of(context).pushNamed('/wallet/coins'),
+      onBuyPass: () => Navigator.of(context).pushNamed('/wallet/passes'),
+      onSubscribe: () =>
+          Navigator.of(context).pushNamed('/wallet/subscriptions'),
+      onMaybeLater: () => Navigator.of(context).maybePop(),
     );
   }
 }

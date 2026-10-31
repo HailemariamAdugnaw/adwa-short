@@ -26,6 +26,7 @@ from app.schemas.revenue import (
     CreatorCreate,
     CreatorDetailOut,
     CreatorListRow,
+    CreatorOption,
     CreatorOut,
     CreatorRevenueSummary,
     CreatorUpdate,
@@ -195,6 +196,30 @@ async def list_creators(
             )
         )
     return out
+
+
+@router.get("/lookup", response_model=List[CreatorOption])
+async def list_creator_options(
+    is_active: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    stmt = select(Creator)
+    if is_active is not None:
+        stmt = stmt.where(Creator.is_active.is_(is_active))
+    stmt = stmt.order_by(Creator.name.asc())
+    res = await db.execute(stmt)
+    creators = list(res.scalars().all())
+    return [
+        CreatorOption(
+            id=c.id,
+            name=c.name,
+            display_name=c.display_name,
+            default_revenue_split_pct=float(c.default_revenue_split_pct or 50.0),
+            is_active=c.is_active,
+        )
+        for c in creators
+    ]
 
 
 @router.get("/{creator_id}", response_model=CreatorDetailOut)

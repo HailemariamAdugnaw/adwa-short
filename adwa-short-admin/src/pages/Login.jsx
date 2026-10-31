@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom'
+import { useLocation, Navigate, Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -10,9 +10,9 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 
 export function Login() {
-  const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((s) => s.login)
+  const user = useAuthStore((s) => s.user)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const [identifier, setIdentifier] = useState('admin@adwashort.com')
   const [password, setPassword] = useState('')
@@ -36,21 +36,47 @@ export function Login() {
     onSuccess: (data) => {
       login(data)
       toast.success('Welcome back')
-      if (data.role === 'creator') {
-        navigate('/creator/dashboard', { replace: true })
-        return
-      }
-      const role = data.admin_role || (data.role === 'admin' ? 'super_admin' : data.role)
-      if (role === 'staff') {
-        navigate('/content/series', { replace: true })
+
+      const rawUser = data.user || {}
+      const role = (data.role || rawUser.role || '').toLowerCase()
+      const adminRole = (
+        data.admin_role ||
+        rawUser.admin_role ||
+        (role === 'admin' ? 'super_admin' : role)
+      ).toLowerCase()
+
+      const isUserCreator = role === 'creator' || adminRole === 'creator'
+      const isUserStaff = role === 'staff' || adminRole === 'staff'
+
+      let target = '/'
+      if (isUserCreator) {
+        target = '/creator/dashboard'
+      } else if (isUserStaff) {
+        target = '/content/series'
       } else {
-        navigate(from === '/login' ? '/' : from, { replace: true })
+        // Superadmin: strictly honor 'from' only if not a creator route
+        target = from && from !== '/login' && !from.startsWith('/creator') ? from : '/'
       }
+
+      // Clean browser redirection based strictly on the fresh role
+      window.location.href = target
     },
     onError: (err) => toast.error(errMsg(err, 'Login failed. Check credentials.')),
   })
 
-  if (isAuthenticated) return <Navigate to={from} replace />
+  if (isAuthenticated) {
+    const rawUser = user || {}
+    const role = (rawUser.role || '').toLowerCase()
+    const adminRole = (rawUser.admin_role || '').toLowerCase()
+    if (role === 'creator' || adminRole === 'creator') {
+      return <Navigate to="/creator/dashboard" replace />
+    }
+    if (role === 'staff' || adminRole === 'staff') {
+      return <Navigate to="/content/series" replace />
+    }
+    const safeTarget = from && from !== '/login' && !from.startsWith('/creator') ? from : '/'
+    return <Navigate to={safeTarget} replace />
+  }
 
   const onSubmit = (e) => {
     e.preventDefault()

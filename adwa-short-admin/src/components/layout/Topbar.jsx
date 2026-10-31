@@ -54,7 +54,7 @@ export function Topbar({ onMenu }) {
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
+    window.location.href = '/login'
   }
 
   return (

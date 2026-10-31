@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { queryClient } from './queryClient'
 
 export const useAuthStore = create(
   persist(
@@ -9,15 +10,30 @@ export const useAuthStore = create(
       refreshToken: null,
       isAuthenticated: false,
       setUser: (user) => set({ user }),
-      setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken, isAuthenticated: true }),
+      setTokens: (accessToken, refreshToken) =>
+        set({ accessToken, refreshToken, isAuthenticated: true }),
       login: (data) => {
-        const u = data.user || {
-          id: data.user_id,
-          role: data.role,
-          admin_role: data.admin_role || (data.role === 'admin' ? 'super_admin' : data.role),
-          display_name: data.display_name,
-          email: data.email,
+        try {
+          queryClient.clear()
+        } catch {
+          // ignore queryClient clearing errors during init
         }
+
+        const rawUser = data.user || {}
+        const role = data.role || rawUser.role || 'staff'
+        const adminRole =
+          data.admin_role ||
+          rawUser.admin_role ||
+          (role === 'admin' ? 'super_admin' : role)
+
+        const u = {
+          id: data.user_id || rawUser.id,
+          role,
+          admin_role: adminRole,
+          display_name: data.display_name || rawUser.display_name,
+          email: data.email || rawUser.email,
+        }
+
         set({
           user: u,
           accessToken: data.access_token,
@@ -25,8 +41,22 @@ export const useAuthStore = create(
           isAuthenticated: true,
         })
       },
-      logout: () =>
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
+      logout: () => {
+        try {
+          queryClient.clear()
+        } catch {
+          // ignore queryClient clearing errors
+        }
+
+        try {
+          localStorage.removeItem('adwa-admin-auth')
+          sessionStorage.clear()
+        } catch {
+          // ignore storage clearing errors
+        }
+
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
+      },
     }),
     {
       name: 'adwa-admin-auth',

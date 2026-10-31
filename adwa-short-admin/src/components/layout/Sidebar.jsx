@@ -20,6 +20,7 @@ import {
   MessageSquare,
   ShieldCheck,
   History,
+  X,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../lib/store'
@@ -99,7 +100,7 @@ const NAV = [
   },
 ]
 
-export function Sidebar({ onNavigate }) {
+export function Sidebar({ onNavigate, onClose }) {
   const user = useAuthStore((s) => s.user)
   const isSuperAdmin = checkSuperAdmin(user)
 
@@ -110,17 +111,29 @@ export function Sidebar({ onNavigate }) {
     return { ...group, items: visibleItems }
   }).filter(Boolean)
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-border bg-surface">
-      <div className="flex h-16 items-center gap-2.5 border-b border-border px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent shadow-[0_0_18px_-4px_rgba(200,16,46,0.8)]">
-          <Clapperboard className="h-5 w-5 text-white" />
+    <aside className="flex h-full w-full lg:w-64 flex-col border-r border-border bg-[#0e0e12]">
+      <div className="flex h-16 items-center justify-between border-b border-border px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent shadow-[0_0_18px_-4px_rgba(200,16,46,0.8)]">
+            <Clapperboard className="h-5 w-5 text-white" />
+          </div>
+          <div className="leading-tight">
+            <p className="text-sm font-extrabold tracking-wider text-text-primary">
+              ADWA <span className="text-accent">SHORT</span>
+            </p>
+            <p className="text-[10px] uppercase tracking-widest text-text-muted">Admin Console</p>
+          </div>
         </div>
-        <div className="leading-tight">
-          <p className="text-sm font-extrabold tracking-wider text-text-primary">
-            ADWA <span className="text-accent">SHORT</span>
-          </p>
-          <p className="text-[10px] uppercase tracking-widest text-text-muted">Admin Console</p>
-        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-primary lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">

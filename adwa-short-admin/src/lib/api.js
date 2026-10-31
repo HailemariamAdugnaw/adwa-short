@@ -137,6 +137,7 @@ export const publishEpisode = (id) => post(`/admin/content/episodes/${id}/publis
 export const unpublishEpisode = (id) => post(`/admin/content/episodes/${id}/unpublish`)
 
 export const getCreators = (params) => api.get('/creators', { params }).then((r) => r.data)
+export const getCreatorOptions = (params) => api.get('/creators/lookup', { params }).then((r) => r.data)
 export const getCreator = (id) => api.get(`/creators/${id}`).then((r) => r.data)
 export const createCreator = (data) => api.post('/creators', data).then((r) => r.data)
 export const updateCreator = (id, data) => api.put(`/creators/${id}`, data).then((r) => r.data)

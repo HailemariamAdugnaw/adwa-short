@@ -10,10 +10,10 @@ export function SuperAdminRoute({ children }) {
   const creator = isCreator(user)
 
   useEffect(() => {
-    if (user && !isSuper) {
+    if (user && !isSuper && !creator) {
       toast.error('Restricted section: Super Admin privileges required')
     }
-  }, [user, isSuper])
+  }, [user, isSuper, creator])
 
   if (!isSuper) {
     if (creator) {

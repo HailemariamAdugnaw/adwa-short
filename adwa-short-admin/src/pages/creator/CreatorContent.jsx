@@ -115,7 +115,7 @@ export function CreatorContent() {
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
           <span>
-            <strong className="text-text-primary">1-Minute Watch Rule:</strong> Views qualify only when viewers watch for at least 60 seconds. Ad views retain 100% platform share (0 Birr creator credit).
+            <strong className="text-text-primary">1-Minute Watch Rule:</strong> Views qualify only when viewers watch for at least 60 seconds. Creator earnings are credited via Coin pay-per-view, Time Passes, and VIP Subscriptions (ad revenues are retained entirely by ADWA SHORT).
           </span>
         </div>
       </div>
@@ -146,7 +146,6 @@ export function CreatorContent() {
                   <th className="px-3 py-3.5">Coin Views / Rev</th>
                   <th className="px-3 py-3.5">Pass Views / Rev</th>
                   <th className="px-3 py-3.5">Sub Views / Rev</th>
-                  <th className="px-3 py-3.5">Ad Views (0 Birr)</th>
                   <th className="px-3 py-3.5 text-center">Qualified Views</th>
                   <th className="px-3 py-3.5 text-right font-bold text-emerald-400">Net Revenue</th>
                   <th className="px-4 py-3.5 text-center">Rating</th>
@@ -212,16 +211,6 @@ export function CreatorContent() {
                         <span className="font-semibold text-text-primary">{formatNumber(item.subscription_views)}</span>
                         <p className="text-[10px] text-emerald-400 font-mono">
                           +{formatBirr(item.revenue_sub_birr)}
-                        </p>
-                      </div>
-                    </td>
-
-                    {/* Ad-Unlocked */}
-                    <td className="px-3 py-3.5">
-                      <div>
-                        <span className="font-semibold text-text-primary">{formatNumber(item.ad_views)}</span>
-                        <p className="text-[10px] text-text-muted font-mono">
-                          0.00 Birr
                         </p>
                       </div>
                     </td>

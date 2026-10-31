@@ -80,8 +80,6 @@ export function TimePasses() {
         </Button>
       </div>
 
-      <InfoCard title="How Time Passes Work" icon={HelpCircle} items={INFO_ITEMS} />
-
       <Card padding="none" className="overflow-hidden">
         <Table>
           <THead>
@@ -145,6 +143,8 @@ export function TimePasses() {
           </TBody>
         </Table>
       </Card>
+
+      <InfoCard title="How Time Passes Work" icon={HelpCircle} items={INFO_ITEMS} />
 
       <Modal
         open={open}

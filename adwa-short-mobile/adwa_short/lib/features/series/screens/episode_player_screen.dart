@@ -733,90 +733,66 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> {
       return;
     }
     final item = _toShortItem();
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (innerContext) => Scaffold(
-          backgroundColor: AppColors.black,
-          body: SafeArea(
-            child: Stack(
-              children: [
-                PaywallOverlay(
-                  item: item,
-                  onUnlockAds: () async {
-                    final auth = innerContext.read<AuthProvider>();
-                    if (!auth.isAuthenticated) {
-                      final loggedIn = await GuestAuthPrompt.show(
-                        innerContext,
-                        title: 'Sign In to Unlock',
-                        message:
-                            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
-                      );
-                      if (!loggedIn || !innerContext.mounted) return;
-                      await innerContext
-                          .read<WalletProvider>()
-                          .loadWallet(refresh: true);
-                    }
-                    final adService = innerContext.read<AdService>();
-                    final ok = await adService.showRewardedAd(
-                      innerContext,
-                      episodeId: _currentEpisode.id,
-                      episodeTitle:
-                          'Episode ${_currentEpisode.number} · ${_currentEpisode.title}',
-                    );
-                    if (ok && innerContext.mounted) {
-                      Navigator.of(innerContext).maybePop();
-                      _checkAccessAndPlay();
-                    }
-                  },
-                  onBuyCoins: () => _handleCoinUnlock(innerContext),
-                  onBuyPass: () async {
-                    final auth = innerContext.read<AuthProvider>();
-                    if (!auth.isAuthenticated) {
-                      final loggedIn = await GuestAuthPrompt.show(
-                        innerContext,
-                        title: 'Sign In to Buy Pass',
-                        message:
-                            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
-                      );
-                      if (!loggedIn || !innerContext.mounted) return;
-                    }
-                    if (!innerContext.mounted) return;
-                    Navigator.of(innerContext).pushNamed(AppRoutes.passes);
-                  },
-                  onSubscribe: () async {
-                    final auth = innerContext.read<AuthProvider>();
-                    if (!auth.isAuthenticated) {
-                      final loggedIn = await GuestAuthPrompt.show(
-                        innerContext,
-                        title: 'Sign In to Subscribe',
-                        message:
-                            'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
-                      );
-                      if (!loggedIn || !innerContext.mounted) return;
-                    }
-                    if (!innerContext.mounted) return;
-                    Navigator.of(innerContext)
-                        .pushNamed(AppRoutes.subscriptions);
-                  },
-                  onMaybeLater: () =>
-                      Navigator.of(innerContext).maybePop(),
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: AppColors.white),
-                    onPressed: () =>
-                        Navigator.of(innerContext).maybePop(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    PaywallOverlay.showModal(
+      context,
+      item: item,
+      onUnlockAds: () async {
+        final auth = context.read<AuthProvider>();
+        if (!auth.isAuthenticated) {
+          final loggedIn = await GuestAuthPrompt.show(
+            context,
+            title: 'Sign In to Unlock',
+            message:
+                'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+          );
+          if (!loggedIn || !context.mounted) return;
+          await context
+              .read<WalletProvider>()
+              .loadWallet(refresh: true);
+        }
+        if (!context.mounted) return;
+        final adService = context.read<AdService>();
+        final ok = await adService.showRewardedAd(
+          context,
+          episodeId: _currentEpisode.id,
+          episodeTitle:
+              'Episode ${_currentEpisode.number} · ${_currentEpisode.title}',
+        );
+        if (ok && context.mounted) {
+          Navigator.of(context).maybePop();
+          _checkAccessAndPlay();
+        }
+      },
+      onBuyCoins: () => _handleCoinUnlock(context),
+      onBuyPass: () async {
+        final auth = context.read<AuthProvider>();
+        if (!auth.isAuthenticated) {
+          final loggedIn = await GuestAuthPrompt.show(
+            context,
+            title: 'Sign In to Buy Pass',
+            message:
+                'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+          );
+          if (!loggedIn || !context.mounted) return;
+        }
+        if (!context.mounted) return;
+        Navigator.of(context).pushNamed(AppRoutes.passes);
+      },
+      onSubscribe: () async {
+        final auth = context.read<AuthProvider>();
+        if (!auth.isAuthenticated) {
+          final loggedIn = await GuestAuthPrompt.show(
+            context,
+            title: 'Sign In to Subscribe',
+            message:
+                'Please sign in or register to unlock episodes, buy coins, and access subscriptions.',
+          );
+          if (!loggedIn || !context.mounted) return;
+        }
+        if (!context.mounted) return;
+        Navigator.of(context).pushNamed(AppRoutes.subscriptions);
+      },
+      onMaybeLater: () => Navigator.of(context).maybePop(),
     );
   }
 

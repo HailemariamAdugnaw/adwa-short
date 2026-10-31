@@ -6,6 +6,7 @@ import {
   publishEpisode,
   unpublishEpisode,
   getCreators,
+  getCreatorOptions,
   getCreator,
   createCreator,
   updateCreator,
@@ -255,10 +256,32 @@ export function useUserDevices(userId) {
 }
 
 export function useCreators(params) {
+  const role = useAuthStore((s) => s.user?.role)
+  const isSuperAdmin = role === 'super_admin'
   return useQuery({
-    queryKey: ['creators', params],
+    queryKey: ['creators', isSuperAdmin, params],
     queryFn: async () => {
-      const data = await getCreators(params)
+      if (isSuperAdmin) {
+        try {
+          const data = await getCreators(params)
+          return Array.isArray(data) ? data : []
+        } catch {
+          const lookup = await getCreatorOptions(params)
+          return Array.isArray(lookup) ? lookup : []
+        }
+      }
+      const data = await getCreatorOptions(params)
+      return Array.isArray(data) ? data : []
+    },
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function useCreatorOptions(params) {
+  return useQuery({
+    queryKey: ['creator-options', params],
+    queryFn: async () => {
+      const data = await getCreatorOptions(params)
       return Array.isArray(data) ? data : []
     },
     placeholderData: (prev) => prev,

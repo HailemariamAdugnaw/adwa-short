@@ -9,6 +9,7 @@ import {
   Sparkles,
   LogOut,
   ExternalLink,
+  X,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../lib/store'
@@ -43,28 +44,45 @@ const CREATOR_NAV = [
   },
 ]
 
-export function CreatorSidebar({ onNavigate }) {
+export function CreatorSidebar({ onNavigate, onClose }) {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const { data: profile } = useCreatorPortalProfile()
 
   const splitPct = profile?.default_revenue_split_pct ?? 50.0
 
+  const handleLogout = () => {
+    logout()
+    window.location.href = '/login'
+  }
+
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-border bg-surface-1">
-      <div className="flex h-16 items-center gap-3 border-b border-border px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent shadow-[0_0_24px_-4px_rgba(200,16,46,0.7)]">
-          <Clapperboard className="h-5 w-5 text-white" />
-        </div>
-        <div className="leading-tight">
-          <p className="text-sm font-extrabold tracking-wider text-white">
-            ADWA <span className="text-accent">SHORT</span>
-          </p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[9px] uppercase tracking-widest font-bold text-amber-400">Creator Studio</span>
-            <Sparkles className="h-2.5 w-2.5 text-amber-400" />
+    <aside className="flex h-full w-full lg:w-64 flex-col border-r border-border bg-[#0e0e12]">
+      <div className="flex h-16 items-center justify-between border-b border-border px-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent shadow-[0_0_24px_-4px_rgba(200,16,46,0.7)]">
+            <Clapperboard className="h-5 w-5 text-white" />
+          </div>
+          <div className="leading-tight">
+            <p className="text-sm font-extrabold tracking-wider text-white">
+              ADWA <span className="text-accent">SHORT</span>
+            </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[9px] uppercase tracking-widest font-bold text-amber-400">Creator Studio</span>
+              <Sparkles className="h-2.5 w-2.5 text-amber-400" />
+            </div>
           </div>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-primary lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <div className="p-3">
@@ -136,7 +154,7 @@ export function CreatorSidebar({ onNavigate }) {
             </div>
           </div>
           <button
-            onClick={() => logout()}
+            onClick={handleLogout}
             title="Sign Out"
             className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-2 hover:text-accent transition-colors"
           >

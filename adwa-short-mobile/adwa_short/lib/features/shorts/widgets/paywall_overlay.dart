@@ -15,6 +15,7 @@ class PaywallOverlay extends StatefulWidget {
     this.onBuyPass,
     this.onSubscribe,
     this.onMaybeLater,
+    this.isBottomSheet = false,
   });
 
   final ShortItem item;
@@ -23,6 +24,7 @@ class PaywallOverlay extends StatefulWidget {
   final VoidCallback? onBuyPass;
   final VoidCallback? onSubscribe;
   final VoidCallback? onMaybeLater;
+  final bool isBottomSheet;
 
   static Future<void> showModal(
     BuildContext context, {
@@ -31,18 +33,21 @@ class PaywallOverlay extends StatefulWidget {
     VoidCallback? onBuyCoins,
     VoidCallback? onBuyPass,
     VoidCallback? onSubscribe,
+    VoidCallback? onMaybeLater,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      barrierColor: Colors.black.withValues(alpha: 0.75),
       builder: (ctx) => PaywallOverlay(
         item: item,
+        isBottomSheet: true,
         onUnlockAds: onUnlockAds,
         onBuyCoins: onBuyCoins,
         onBuyPass: onBuyPass,
         onSubscribe: onSubscribe,
-        onMaybeLater: () => Navigator.of(ctx).maybePop(),
+        onMaybeLater: onMaybeLater ?? () => Navigator.of(ctx).maybePop(),
       ),
     );
   }
@@ -105,84 +110,128 @@ class _PaywallOverlayState extends State<PaywallOverlay>
     final isGuest = _isGuestSession(context);
     final coinCost = widget.item.coinCost > 0 ? widget.item.coinCost : 50;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // 1. Pure Black Background
-        Container(color: Colors.black),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxHeight < 680;
+        final lockSize = isCompact ? 56.0 : 68.0;
+        final headerSpacing = isCompact ? 6.0 : 10.0;
+        final pillSpacing = isCompact ? 5.0 : 8.0;
+        final cardTopSpacing = isCompact ? 8.0 : 12.0;
 
-        // 2. Subtle Diagonal Red Light Ribbons/Streaks
-        const Positioned.fill(
-          child: CustomPaint(
-            painter: _PaywallWavePainter(),
+        final sheetContent = Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F080A),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(
+              color: const Color(0xFFFF1E27),
+              width: 1.4,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x55FF1744),
+                blurRadius: 28,
+                spreadRadius: 2,
+                offset: Offset(0, -6),
+              ),
+            ],
           ),
-        ),
-
-        // 3. Tap to dismiss backdrop handler
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: widget.onMaybeLater,
-          ),
-        ),
-
-        // 4. Main Compact Single-Screen Content
-        SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isCompact = constraints.maxHeight < 680;
-              final lockSize = isCompact ? 72.0 : 88.0;
-              final headerSpacing = isCompact ? 8.0 : 12.0;
-              final pillSpacing = isCompact ? 6.0 : 10.0;
-              final cardTopSpacing = isCompact ? 12.0 : 18.0;
-
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Top Centered Pulsing Red Lock Badge with Glowing Ambient Rings
-                      _buildPulsingLockBadge(lockSize),
-                      SizedBox(height: headerSpacing),
-
-                      // Episode Header: "Series · Series - Episode X"
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          _episodeHeader(),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: isCompact ? 15 : 16.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                isCompact ? 8 : 12,
+                16,
+                isCompact ? 10 : 14,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Top Drag Handle Pill
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4.5,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(2.5),
                       ),
-                      SizedBox(height: pillSpacing),
-
-                      // Compact Red-Bordered "Locked" Pill Badge
-                      _buildLockedBadge(),
-                      SizedBox(height: cardTopSpacing),
-
-                      // The Glowing Cyber Card Frame
-                      _buildCyberCard(
-                        isGuest: isGuest,
-                        coinCost: coinCost,
-                        isCompact: isCompact,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
+                  SizedBox(height: isCompact ? 8 : 10),
+
+                  // Top Centered Pulsing Red Lock Badge
+                  _buildPulsingLockBadge(lockSize),
+                  SizedBox(height: headerSpacing),
+
+                  // Episode Header: "Series · Series - Episode X"
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      _episodeHeader(),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isCompact ? 14.5 : 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: pillSpacing),
+
+                  // Compact Red-Bordered "Locked" Pill Badge
+                  _buildLockedBadge(),
+                  SizedBox(height: cardTopSpacing),
+
+                  // The Glowing Cyber Card Frame
+                  _buildCyberCard(
+                    isGuest: isGuest,
+                    coinCost: coinCost,
+                    isCompact: isCompact,
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ],
+        );
+
+        if (widget.isBottomSheet) {
+          return sheetContent;
+        }
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Semi-transparent dimmed backdrop
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onMaybeLater,
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.72),
+              ),
+            ),
+
+            // Subtle Diagonal Red Light Ribbons/Streaks behind sheet
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _PaywallWavePainter(),
+                ),
+              ),
+            ),
+
+            // Bottom-anchored responsive bottom sheet container
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: sheetContent,
+            ),
+          ],
+        );
+      },
     );
   }
 

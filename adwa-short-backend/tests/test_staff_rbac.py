@@ -158,6 +158,11 @@ async def test_staff_permissions_boundary(client, staff_headers, admin_headers):
     res_creators_list = await client.get("/creators", headers=staff_headers)
     assert res_creators_list.status_code == 403
 
+    # But Staff CAN access /creators/lookup for series/episode forms
+    res_creators_lookup = await client.get("/creators/lookup", headers=staff_headers)
+    assert res_creators_lookup.status_code == 200
+    assert isinstance(res_creators_lookup.json(), list)
+
     res_split_create = await client.post(
         "/creators",
         json={"name": "Greedy Creator", "default_revenue_split_pct": 70},

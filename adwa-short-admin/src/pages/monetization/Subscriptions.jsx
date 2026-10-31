@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, CreditCard } from 'lucide-react'
+import { Plus, Pencil, Trash2, CreditCard, HelpCircle } from 'lucide-react'
 import { useSubscriptionPlans } from '../../lib/hooks'
 import { del, errMsg } from '../../lib/api'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
+import { InfoCard } from '../../components/ui/InfoCard'
 import {
   Table,
   TBody,
@@ -22,6 +23,15 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { Badge } from '../../components/ui/Badge'
 import { SubscriptionPlanForm } from '../../components/content/SubscriptionPlanForm'
 import { formatBirr } from '../../lib/format'
+
+const SUBSCRIPTION_INFO_ITEMS = [
+  'Subscriptions provide users with ongoing VIP recurring access to all current and upcoming short drama series on ADWA SHORT without coin paywalls.',
+  'Available billing cycles: Weekly, Monthly, or Yearly, processed in Ethiopian Birr (ETB) via Commercial Bank of Ethiopia (CBE / CBE Birr) or platform wallet.',
+  'Automatic renewal recurs at the end of each billing cycle unless cancelled by the user in their account settings at least 24 hours prior.',
+  'Subscribers enjoy 100% ad-free viewing, ultra-fast streaming bandwidth, and instant access to all new releases.',
+  'Revenue from subscription plans is pooled and shared with creators based on verified aggregate watch-time per billing cycle.',
+  'Admins can create and activate multiple subscription tiers with custom pricing and duration to incentivize user retention.',
+]
 
 export function Subscriptions() {
   const qc = useQueryClient()
@@ -121,6 +131,8 @@ export function Subscriptions() {
           </TBody>
         </Table>
       </Card>
+
+      <InfoCard title="How Subscriptions Work" icon={HelpCircle} items={SUBSCRIPTION_INFO_ITEMS} />
 
       <Modal
         open={open}

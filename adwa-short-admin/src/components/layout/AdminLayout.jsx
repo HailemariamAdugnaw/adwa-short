@@ -38,10 +38,13 @@ export function AdminLayout() {
       </div>
 
       {mobileNav && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setMobileNav(false)} />
-          <div className="absolute left-0 top-0 h-full animate-fade-in">
-            <ActiveSidebar onNavigate={() => setMobileNav(false)} />
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileNav(false)}
+          />
+          <div className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col bg-[#0e0e12] border-r border-[#26262a] shadow-2xl animate-fade-in">
+            <ActiveSidebar onNavigate={() => setMobileNav(false)} onClose={() => setMobileNav(false)} />
           </div>
         </div>
       )}

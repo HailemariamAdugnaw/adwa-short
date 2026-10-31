@@ -42,6 +42,15 @@ class CreatorBase(BaseModel):
     is_active: bool = True
 
 
+class CreatorOption(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    display_name: Optional[str] = None
+    default_revenue_split_pct: Optional[float] = 50.0
+    is_active: bool = True
+
+
 class CreatorCreate(CreatorBase):
     password: Optional[str] = None
 
